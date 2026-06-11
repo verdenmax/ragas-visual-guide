@@ -267,9 +267,101 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>Backends 可插拔</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+上一课的实验把结果<strong>存进了 backend</strong>，却没说存到哪、怎么换。本课打开 <span class="mono">backends/</span>：
+一套统一的 <span class="inline">BaseBackend</span> 接口、四个内置实现（csv / jsonl / 内存 / 网盘），靠<strong>"注册表 + 字符串名"</strong>随意切换，
+还能用 entry-points 让第三方 backend <strong>即插即用</strong>。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  backend 像插线板上的<strong>存储插槽</strong>：要本地 CSV 就插 <span class="inline">"local/csv"</span>，要保真嵌套结构就换 <span class="inline">"local/jsonl"</span>，
+  想纯内存跑完即弃就插 <span class="inline">"inmemory"</span>，要存到云端就插 <span class="inline">"gdrive"</span>。上层代码只认<strong>插槽名</strong>，插的是哪块"存储电器"由注册表负责对上号。
+</div>
+
+<h2>BaseBackend：六个方法定下契约</h2>
+<p><span class="mono">backends/base.py</span> 的 <span class="inline">BaseBackend</span> 是个 <span class="mono">ABC</span>，把"存取数据集 / 实验"抽象成六个方法。数据统一是 <span class="mono">List[Dict[str, Any]]</span>，数据集与实验<strong>接口相同、存储分开</strong>：</p>
+<table class="t">
+  <tr><th>方法</th><th>职责</th></tr>
+  <tr><td class="mono">load_dataset(name)<br>load_experiment(name)</td><td>按名读出一串字典；缺失抛 <span class="mono">FileNotFoundError</span>；空集返回 <span class="mono">[]</span> 而非 <span class="mono">None</span></td></tr>
+  <tr><td class="mono">save_dataset(name, data, data_model=None)<br>save_experiment(...)</td><td>覆盖式写入；按需创建存储目录；<span class="mono">data_model</span> 仅作校验上下文（可忽略）</td></tr>
+  <tr><td class="mono">list_datasets()<br>list_experiments()</td><td>列出已有名字（排序、不含扩展名 / 路径）</td></tr>
+</table>
+<p>正因为契约只关心"按名读写一串字典"，<strong>底层存的是文件、内存还是云端，对上层完全透明</strong>——这是后面能"随意换插槽"的前提。</p>
+
+<h2>四个内置 backend</h2>
+<table class="t">
+  <tr><th>类</th><th>字符串名</th><th>特点 / 适用</th></tr>
+  <tr><td class="mono">LocalCSVBackend</td><td class="mono">local/csv</td><td>CSV 文件，人类可读、能用表格软件打开；但复杂结构会被<strong>压成字符串</strong>，只宜简单表格</td></tr>
+  <tr><td class="mono">LocalJSONLBackend</td><td class="mono">local/jsonl</td><td>JSONL 文件，<strong>保真各种数据类型</strong>与嵌套结构，复杂数据首选</td></tr>
+  <tr><td class="mono">InMemoryBackend</td><td class="mono">inmemory</td><td>纯内存、<strong>不落盘</strong>，零配置；适合临时 train/test 切分、中间结果与测试</td></tr>
+  <tr><td class="mono">GDriveBackend</td><td class="mono">gdrive</td><td>存到 Google Drive；属<strong>可选依赖</strong>，装不上也不影响其余 backend（<span class="mono">__init__.py</span> 里 try/except 导入）</td></tr>
+</table>
+<p>文件型的 <span class="inline">LocalCSVBackend</span> / <span class="inline">LocalJSONLBackend</span> 都接收一个 <span class="mono">root_dir</span>，并在其下分出 <span class="mono">datasets/</span> 与 <span class="mono">experiments/</span> 两个子目录——正好对接上一课说的"按 <span class="mono">DATATABLE_TYPE</span> 分流"。</p>
+
+<h2>注册表 + 字符串名：怎么选 backend</h2>
+<p>你几乎不用手动 <span class="mono">import</span> 某个 backend 类——给 <span class="inline">Dataset</span> 一个<strong>字符串名</strong>即可，其余交给注册表：</p>
+<pre class="code"><span class="kw">from</span> ragas <span class="kw">import</span> Dataset
+<span class="kw">from</span> ragas.backends <span class="kw">import</span> get_registry, print_available_backends
+
+print_available_backends()        <span class="cm"># 打印所有已注册 backend（名字 / 别名 / 模块 / 文档）</span>
+
+<span class="cm"># 用字符串名选 backend；root_dir 等参数透传给该 backend 的构造函数</span>
+ds = Dataset(name=<span class="st">"qa"</span>, backend=<span class="st">"local/csv"</span>, root_dir=<span class="st">"./data"</span>)</pre>
+<p>背后是 <span class="inline">DataTable._resolve_backend</span>：发现 backend 是字符串，就向 <span class="inline">get_registry()</span> 拿到全局 <span class="inline">BackendRegistry</span>（单例），
+按名查出类、用 <span class="mono">**kwargs</span> 实例化；查不到则报错并<strong>列出所有可用名字</strong>。需要时也能 <span class="inline">register_backend(name, cls, aliases=...)</span> 手动注册自定义 backend。</p>
+
+<h2>entry-points：第三方 backend 即插即用</h2>
+<p>内置的四个 backend 并不是写死在某个列表里，而是通过 <span class="mono">pyproject.toml</span> 的 entry-points 声明、由注册表<strong>自动发现</strong>：</p>
+<pre class="code"><span class="cm"># pyproject.toml</span>
+[project.entry-points.<span class="st">"ragas.backends"</span>]
+<span class="st">"local/csv"</span>   = <span class="st">"ragas.backends.local_csv:LocalCSVBackend"</span>
+<span class="st">"local/jsonl"</span> = <span class="st">"ragas.backends.local_jsonl:LocalJSONLBackend"</span>
+<span class="st">"inmemory"</span>    = <span class="st">"ragas.backends.inmemory:InMemoryBackend"</span>
+<span class="st">"gdrive"</span>      = <span class="st">"ragas.backends.gdrive_backend:GDriveBackend"</span></pre>
+<p><span class="inline">BackendRegistry.discover_backends()</span> 用 <span class="inline">importlib.metadata.entry_points()</span> 扫描 <span class="mono">"ragas.backends"</span> 这一组，逐个 <span class="mono">load()</span> 注册（单个失败只记 warning）。
+于是<strong>任何第三方包</strong>只要在自己的 <span class="mono">pyproject.toml</span> 里声明同组 entry-point，装上后就能被 ragas 认出来——<strong>无需改 ragas 源码</strong>。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 为什么要把 backend 名声明成 entry-points，而不是写死一个字典？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 解耦：发现机制 vs 硬编码</div>
+      <div class="a">写死字典意味着每加一个 backend 都要改 ragas 本体。entry-points 把"有哪些 backend"变成<strong>安装期可发现</strong>的元数据：
+        第三方 <span class="mono">pip install</span> 自己的包，注册表启动时一扫就有了。这正是 setuptools 插件体系的标准玩法（<a href="34-integrations-frameworks.html">第 34 课</a>的集成模块也走这种"可插拔"思路）。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 别名与单例</div>
+      <div class="a"><span class="inline">BackendRegistry</span> 是单例（<span class="mono">__new__</span> 保证全局唯一），像字典一样支持 <span class="mono">in</span> / <span class="mono">[]</span> / <span class="mono">keys()</span>，并支持<strong>别名</strong>（<span class="inline">register_aliases</span>）。
+        首次访问触发一次性 <span class="inline">discover_backends</span>，之后用 <span class="mono">_discovered</span> 标记避免重复扫描。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  接口在 <span class="mono">backends/base.py</span>（<span class="mono">BaseBackend</span> 六个抽象方法）；四个实现分别在 <span class="mono">backends/local_csv.py</span>、<span class="mono">local_jsonl.py</span>、<span class="mono">inmemory.py</span>、<span class="mono">gdrive_backend.py</span>。
+  注册机制在 <span class="mono">backends/registry.py</span>：<span class="mono">BackendRegistry</span>（单例、dict-like、<span class="mono">discover_backends</span> 扫 entry-points）、<span class="mono">get_registry</span>、<span class="mono">register_backend</span>、<span class="mono">print_available_backends</span>、全局 <span class="mono">BACKEND_REGISTRY</span>。
+  字符串解析在 <span class="mono">dataset.py</span> 的 <span class="mono">DataTable._resolve_backend</span>；四个内置名的声明在仓库根 <span class="mono">pyproject.toml</span> 的 <span class="mono">[project.entry-points."ragas.backends"]</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>统一接口屏蔽存储差异</strong>：六个方法 + <span class="mono">List[Dict]</span> 的约定，让 csv / jsonl / 内存 / 云端在上层<strong>长一个样</strong>，换插槽不改业务代码。</li>
+    <li><strong>entry-points 让第三方 backend 即插即用</strong>：声明一条同组 entry-point 即被发现，<strong>无需改 ragas</strong>，也无需上层手动 import。</li>
+    <li><strong>可选依赖优雅降级</strong>：<span class="inline">GDriveBackend</span> 装不上时被 try/except 跳过，不拖垮整包；发现失败也只记 warning。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>存储<strong>可插拔</strong>：<span class="inline">BaseBackend</span> 用六个方法定契约，四个内置实现 csv / jsonl / 内存 / 网盘任选。</li>
+    <li>选 backend 靠<strong>注册表 + 字符串名</strong>：<span class="inline">Dataset(name, "local/csv", root_dir=...)</span> 经 <span class="inline">_resolve_backend</span> 查注册表实例化。</li>
+    <li>记住<strong>注册机制</strong>：entry-points 组 <span class="mono">"ragas.backends"</span> 让第三方 backend 自动被发现，无需改 ragas。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="31-experiments-deep.html"><div class="dir">← 上一课</div><div class="ttl">实验系统深入</div></a><a class="next" href="33-optimization-training.html"><div class="dir">下一课 →</div><div class="ttl">指标优化与训练</div></a></div>
 </div>

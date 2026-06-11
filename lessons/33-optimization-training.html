@@ -267,9 +267,100 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>指标优化与训练</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+LLM 当裁判，难免和人类口味有偏差。ragas 给指标准备了一套<strong>"培训"机制</strong>：喂一批<strong>人工标注</strong>，
+自动<strong>改写指令</strong>、<strong>挑选示例</strong>，把指标调到更贴合人类判断——再用<strong>与标注的相关性</strong>量化"调得准不准"。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  把一个 LLM 指标想成<strong>新来的阅卷老师</strong>：光给评分标准还不够，得拿一沓<strong>标准答案卷</strong>（人工标注）给他<strong>培训</strong>——
+  一边帮他<strong>把评分标准的措辞改清楚</strong>（优化指令），一边给他<strong>看几份典型范卷</strong>（few-shot 示例）。培训完再拿没见过的卷子考他，看打分和老教师有多<strong>一致</strong>。
+</div>
+
+<h2>为什么要"训练"一个指标</h2>
+<p>自定义指标（<a href="11-custom-metrics.html">第 11 课</a>）能跑，不代表打得<strong>准</strong>。同一句 prompt，换种措辞、补两个例子，LLM 裁判的判断可能就从"和人类对不上"变成"高度一致"。
+训练的目标就是<strong>对齐人类标注</strong>：用一批"输入 + 人给的分"作监督信号，自动搜索更好的<strong>指令</strong>与<strong>示例</strong>，而不是靠人肉反复试 prompt。</p>
+
+<h2>MetricWithLLM.train：优化指令 + 挑示例</h2>
+<p>所有 LLM 类内置指标（Faithfulness、AspectCritic、ContextPrecision… 都继承 <span class="inline">MetricWithLLM</span>，<a href="13-metric-base.html">第 13 课</a>）都带一个 <span class="inline">train()</span>。它吃一个 <strong>JSON 标注文件</strong>，按两份配置分别优化：</p>
+<pre class="code"><span class="kw">from</span> ragas.metrics <span class="kw">import</span> AspectCritic
+<span class="kw">from</span> ragas.config <span class="kw">import</span> InstructionConfig, DemonstrationConfig
+
+metric = AspectCritic(name=<span class="st">"correctness"</span>, definition=<span class="st">"答案是否正确"</span>, llm=evaluator_llm)
+
+metric.train(
+    path=<span class="st">"annotations.json"</span>,                              <span class="cm"># 人工标注（必须是 .json）</span>
+    instruction_config=InstructionConfig(llm=optimizer_llm),     <span class="cm"># 优化指令：默认用遗传算法</span>
+    demonstration_config=DemonstrationConfig(embedding=embeddings),  <span class="cm"># 挑 few-shot 示例：按相似度</span>
+)</pre>
+<p>两份配置<strong>各管一摊、都可选</strong>：传谁就优化谁。背后对应两个内部步骤：</p>
+<table class="t">
+  <tr><th>配置</th><th>优化什么</th><th>怎么做</th></tr>
+  <tr><td class="mono">InstructionConfig</td><td>prompt 的<strong>指令</strong>措辞</td><td><span class="inline">_optimize_instruction</span>：跑优化器搜出更好的指令，替换每个 prompt 的 <span class="mono">instruction</span></td></tr>
+  <tr><td class="mono">DemonstrationConfig</td><td>prompt 的 <strong>few-shot 示例</strong></td><td><span class="inline">_optimize_demonstration</span>：把标注转成示例，建 <span class="inline">FewShotPydanticPrompt</span>，按 embedding 相似度挑 <span class="mono">top_k</span> 个（<a href="20-prompt-advanced.html">第 20 课</a>）</td></tr>
+</table>
+<p>训练数据由 <span class="inline">MetricAnnotation.from_json(path, metric_name=self.name)</span> 加载：JSON 以<strong>指标名</strong>为键，每条是"输入 + 人工给的标签/分数"。<span class="inline">DemonstrationConfig</span> 默认 <span class="mono">top_k=3</span>、<span class="mono">threshold=0.7</span>、<span class="mono">technique="similarity"</span>。</p>
+
+<h2>优化器与损失：把 prompt 工程变成可优化问题</h2>
+<p>"改指令"这步交给一个 <span class="inline">Optimizer</span>。<span class="inline">InstructionConfig</span> 默认用 <span class="inline">GeneticOptimizer</span>（遗传算法）：它先从标注里<strong>反推</strong>出一条指令，再通过<strong>交叉、变异</strong>不断演化候选，挑出在标注上表现最好的那条。
+另有可选的 <span class="inline">DSPyOptimizer</span>（包装 DSPy 的 MIPROv2，同时搜索指令 + 示例，需 <span class="mono">ragas[dspy]</span>，按需 try/except 导入）。</p>
+<p>"表现好不好"由一个 <span class="inline">Loss</span> 衡量。若没在 <span class="inline">InstructionConfig</span> 里显式指定，<span class="inline">train</span> 会<strong>按指标的 <span class="mono">output_type</span> 自动选</strong>：</p>
+<table class="t">
+  <tr><th>output_type</th><th>自动选用的 Loss</th><th>含义</th></tr>
+  <tr><td class="mono">BINARY</td><td class="mono">BinaryMetricLoss</td><td>按 <span class="mono">accuracy</span> 或 <span class="mono">f1_score</span> 衡量（如 AspectCritic）</td></tr>
+  <tr><td class="mono">CONTINUOUS / DISCRETE</td><td class="mono">MSELoss</td><td>预测分与标注分的均方误差（如 Faithfulness）</td></tr>
+</table>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> GeneticOptimizer 是怎么"进化"出一条好指令的？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 反推 → 交叉 → 变异</div>
+      <div class="a">它内置了几个 PydanticPrompt：<span class="inline">ReverseEngineerPrompt</span> 先看"标注好的(输入, 期望输出)对"<strong>反推</strong>出"标注员当时大概拿到的指令"，得到初始种群；
+        再用 <span class="inline">CrossOverPrompt</span> 杂交、<span class="inline">FeedbackMutationPrompt</span> 按反馈变异，逐代择优。可优化的步数由 <span class="mono">optimizer_config</span>（默认 <span class="mono">{"max_steps": 100}</span>）控制。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 训练数据长什么样</div>
+      <div class="a"><span class="inline">MetricAnnotation</span> 是个按<strong>指标名分组</strong>的字典（<span class="mono">root: Dict[str, List[SampleAnnotation]]</span>），<span class="mono">dataset[metric_name]</span> 取出该指标的 <span class="inline">SingleMetricAnnotation</span>。
+        后者支持 <span class="inline">train_test_split</span> / <span class="inline">sample</span> / <span class="inline">get_prompt_annotations</span>，正好喂给优化器与 few-shot 构造。优化器至少需要约 <span class="mono">10</span> 条标注才有意义。</div>
+    </div>
+  </div>
+</details>
+
+<h2>Simple 指标的对齐：align_and_validate 与相关性</h2>
+<p>较新的 <span class="inline">SimpleLLMMetric</span> 栈（<span class="inline">DiscreteMetric</span> / <span class="inline">NumericMetric</span> / <span class="inline">RankingMetric</span>）走的是更轻的"对齐 + 验证"一条龙：</p>
+<pre class="code"><span class="cm"># dataset 是带人工分数的 Dataset；一步切分 → 对齐 → 验证</span>
+result = metric.align_and_validate(dataset=labeled, embedding_model=embeddings, llm=evaluator_llm)
+print(result[<span class="st">"correlation"</span>], result[<span class="st">"agreement_rate"</span>])</pre>
+<p>它先 <span class="inline">train_test_split</span>（默认 <span class="mono">test_size=0.2</span>），在训练集上 <span class="inline">align</span>——把相似的标注样本作为<strong>动态 few-shot</strong>塞进 prompt（默认 <span class="mono">max_similar_examples=3</span>、<span class="mono">similarity_threshold=0.7</span>，靠 embedding 检索，<a href="22-embedding-abstraction.html">第 22 课</a>）；
+再在测试集上 <span class="inline">validate_alignment</span>：逐行重新打分，算出与人工标注的 <strong>Cohen's Kappa 相关性</strong>与<strong>一致率</strong>。其中 <span class="inline">get_correlation</span> 在基类是占位、由各子类实现（如 <span class="inline">DiscreteMetric</span> 用 <span class="mono">cohen_kappa_score</span>）。</p>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  传统栈在 <span class="mono">metrics/base.py</span>：<span class="mono">MetricWithLLM.train</span>（加载 <span class="mono">MetricAnnotation.from_json</span>，再走 <span class="mono">_optimize_instruction</span> / <span class="mono">_optimize_demonstration</span>）。
+  优化器在 <span class="mono">optimizers/</span>：<span class="mono">base.py</span> 的 <span class="mono">Optimizer</span>、<span class="mono">genetic.py</span> 的 <span class="mono">GeneticOptimizer</span>、可选 <span class="mono">dspy_optimizer.py</span> 的 <span class="mono">DSPyOptimizer</span>。
+  损失在 <span class="mono">losses.py</span>（<span class="mono">Loss</span> / <span class="mono">MSELoss</span> / <span class="mono">BinaryMetricLoss</span>）；配置在 <span class="mono">config.py</span>（<span class="mono">InstructionConfig</span> / <span class="mono">DemonstrationConfig</span>）；标注模型在 <span class="mono">dataset_schema.py</span>（<span class="mono">MetricAnnotation</span> / <span class="mono">SingleMetricAnnotation</span>）。
+  Simple 栈的 <span class="mono">align</span> / <span class="mono">align_and_validate</span> / <span class="mono">validate_alignment</span> / <span class="mono">get_correlation</span> 也在 <span class="mono">metrics/base.py</span> 的 <span class="mono">SimpleLLMMetric</span>，子类实现见 <span class="mono">metrics/discrete.py</span>、<span class="mono">numeric.py</span>、<span class="mono">ranking.py</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>把 prompt 工程变成可优化问题</strong>：指令搜索交给遗传算法 / DSPy，示例挑选交给 embedding 相似度——从"人肉调 prompt"升级为"用数据自动搜"。</li>
+    <li><strong>用与人类标注的相关性衡量指标好坏</strong>：Cohen's Kappa + 一致率给出客观数字，"裁判准不准"也变得可量化、可对比。</li>
+    <li><strong>指令与示例解耦优化</strong>：<span class="inline">InstructionConfig</span> / <span class="inline">DemonstrationConfig</span> 各自可选，按需单独或一起优化，loss 还能按 <span class="mono">output_type</span> 自动选。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>指标不仅能<strong>用</strong>，还能被<strong>训练到更准</strong>：用人工标注对齐 LLM 裁判与人类判断。</li>
+    <li><span class="inline">MetricWithLLM.train</span> 从 <span class="inline">MetricAnnotation</span> 学习，优化<strong>指令</strong>（GeneticOptimizer / DSPy + loss）与 <strong>few-shot 示例</strong>（相似度挑选）。</li>
+    <li>新栈 <span class="inline">SimpleLLMMetric.align_and_validate</span> 一步搞定切分→对齐→验证，用<strong>相关性 / 一致率</strong>报告效果。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="32-backends.html"><div class="dir">← 上一课</div><div class="ttl">Backends 可插拔</div></a><a class="next" href="34-integrations-frameworks.html"><div class="dir">下一课 →</div><div class="ttl">集成①：框架</div></a></div>
 </div>

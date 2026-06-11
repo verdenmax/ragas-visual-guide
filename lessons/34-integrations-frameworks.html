@@ -267,9 +267,89 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>集成①：框架</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+ragas 不要求你抛弃现有技术栈。<span class="mono">integrations/</span> 提供一堆<strong>"适配插头"</strong>：
+把 LangChain、LlamaIndex、LangGraph、各种多 Agent 框架的对象 / 轨迹，转成 ragas 认得的<strong>消息或数据集</strong>，接进评测与测试生成。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  不同框架像不同国家的<strong>插座标准</strong>。<span class="mono">integrations/</span> 是一盒<strong>转接头</strong>：
+  LangGraph 的对话、Bedrock Agent 的运行轨迹、Griptape 的输出……各配一个插头，转成 ragas 的统一插脚（<span class="inline">Message</span> / <span class="inline">EvaluationDataset</span>），
+  插上就能用前面学的指标和实验去评测，<strong>不用重写</strong>你的应用。
+</div>
+
+<h2>两个方向：把别人的东西接进来</h2>
+<p>集成大体分两类。<strong>评测方向</strong>——把框架产物转成 ragas 输入：要么转成 <span class="inline">EvaluationDataset</span>（<a href="06-two-datasets.html">第 6 课</a>）直接喂 <span class="inline">evaluate</span> / <span class="inline">@experiment</span>，
+要么转成 ragas 的 <span class="inline">Message</span> 列表喂给 <strong>agent 指标</strong>（<a href="18-agent-metrics-internals.html">第 18 课</a>）。<strong>测试生成方向</strong>——用框架的 LLM / Embedding 造测试集：</p>
+<pre class="code"><span class="kw">from</span> ragas.testset <span class="kw">import</span> TestsetGenerator
+
+<span class="cm"># 用 LangChain 的 LLM / Embedding 包好一个生成器（也有 from_llama_index）</span>
+generator = TestsetGenerator.from_langchain(llm=lc_llm, embedding_model=lc_embeddings)
+testset = generator.generate_with_langchain_docs(docs, testset_size=10)   <span class="cm"># 见第 30 课</span></pre>
+
+<h2>主要框架集成（一栏一句）</h2>
+<p>下面都是 <span class="mono">integrations/</span> 里<strong>确实存在</strong>的框架 / Agent / 协议适配（观测类工具留到 <a href="35-integrations-observability.html">第 35 课</a>）：</p>
+<table class="t">
+  <tr><th>框架 / 系统</th><th>子模块</th><th>接入方式（公开符号）</th></tr>
+  <tr><td><strong>LangChain</strong></td><td class="mono">integrations/langchain.py</td><td><span class="mono">EvaluatorChain</span>：把 ragas 指标包成 LangSmith 的 <span class="mono">RunEvaluator</span> / Chain</td></tr>
+  <tr><td><strong>LlamaIndex</strong></td><td class="mono">integrations/llama_index.py</td><td><span class="mono">evaluate(query_engine, dataset, metrics)</span>：直接评测一个 query engine</td></tr>
+  <tr><td><strong>LangGraph</strong></td><td class="mono">integrations/langgraph.py</td><td><span class="mono">convert_to_ragas_messages</span>：把图执行的消息转成 ragas 消息</td></tr>
+  <tr><td><strong>OpenAI Swarm</strong></td><td class="mono">integrations/swarm.py</td><td><span class="mono">convert_to_ragas_messages</span>：多 Agent 对话 → ragas 消息</td></tr>
+  <tr><td><strong>Amazon Bedrock</strong></td><td class="mono">integrations/amazon_bedrock.py</td><td><span class="mono">convert_to_ragas_messages(traces)</span>：从 Bedrock Agent 轨迹提取消息</td></tr>
+  <tr><td><strong>Griptape</strong></td><td class="mono">integrations/griptape.py</td><td><span class="mono">transform_to_ragas_dataset</span>：转成 <span class="mono">EvaluationDataset</span></td></tr>
+  <tr><td><strong>R2R</strong></td><td class="mono">integrations/r2r.py</td><td><span class="mono">transform_to_ragas_dataset</span>：把 R2R 检索结果转成 <span class="mono">EvaluationDataset</span></td></tr>
+  <tr><td><strong>AG-UI</strong></td><td class="mono">integrations/ag_ui.py</td><td><span class="mono">AGUIEventCollector</span> + <span class="mono">convert_to_ragas_messages</span>：收事件流 → ragas 消息</td></tr>
+</table>
+<p>规律很清楚：<strong>RAG / 检索类</strong>框架（LlamaIndex、Griptape、R2R）多半转成 <span class="inline">EvaluationDataset</span>；
+<strong>Agent / 多 Agent</strong>框架（LangGraph、Swarm、Bedrock、AG-UI）多半转成 <span class="inline">Message</span> 列表，对接 agent 指标。</p>
+
+<h2>lazy import：缺依赖不炸整包</h2>
+<p>这些集成各自依赖不同的第三方库（<span class="mono">langchain</span>、<span class="mono">llama-index</span>…），但 ragas <strong>不</strong>把它们设为必装。秘诀是<strong>包级别的惰性导入</strong>：
+<span class="mono">integrations/__init__.py</span> 几乎是空的——只有一段文档字符串，<strong>不</strong>主动 import 任何子模块。每个框架的依赖都写在<strong>各自的子模块顶部</strong>，你<strong>用哪个才导哪个</strong>：</p>
+<pre class="code"><span class="cm"># import ragas.integrations 本身不会拉进任何可选依赖</span>
+<span class="kw">from</span> ragas.integrations.langgraph <span class="kw">import</span> convert_to_ragas_messages   <span class="cm"># 仅此处才需要 langchain</span>
+<span class="kw">from</span> ragas.integrations.llama_index <span class="kw">import</span> evaluate                   <span class="cm"># 仅此处才需要 llama-index</span></pre>
+<p>于是没装 LlamaIndex 的人，导入 <span class="mono">ragas.integrations.langgraph</span> 照样不受影响——<strong>缺哪个框架，只是那一个插头不能用，整包不受牵连</strong>。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 为什么不在 __init__.py 里统一 import 所有集成？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 一处 import，全员遭殃</div>
+      <div class="a">若 <span class="mono">__init__.py</span> 顶部 <span class="mono">from .llama_index import evaluate</span>，那么<strong>只要</strong>有人 <span class="mono">import ragas.integrations</span>，Python 就会去导 <span class="mono">llama_index</span>——没装就直接 <span class="mono">ImportError</span>。
+        把 import 下沉到子模块，等于"按插头分装"，谁都不强迫谁。这与 <a href="32-backends.html">第 32 课</a>的可选 <span class="inline">GDriveBackend</span>（try/except 导入）是同一思路：<strong>可选能力按需加载</strong>。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 双向打通是什么意思</div>
+      <div class="a">既能把<strong>别的框架</strong>的产物接进 ragas 评测（转 <span class="inline">Message</span> / <span class="inline">EvaluationDataset</span>），也能反过来把 ragas 能力<strong>嵌进</strong>别的框架——比如 <span class="inline">EvaluatorChain</span> 让 ragas 指标变成 LangSmith 里的一个 evaluator。进出两个方向都通。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  目录在 <span class="mono">src/ragas/integrations/</span>：<span class="mono">langchain.py</span>（<span class="mono">EvaluatorChain</span>）、<span class="mono">llama_index.py</span>（<span class="mono">evaluate</span>）、<span class="mono">langgraph.py</span> / <span class="mono">swarm.py</span> / <span class="mono">amazon_bedrock.py</span> / <span class="mono">ag_ui.py</span>（<span class="mono">convert_to_ragas_messages</span> 等）、<span class="mono">griptape.py</span> / <span class="mono">r2r.py</span>（<span class="mono">transform_to_ragas_dataset</span>）。
+  <span class="mono">integrations/__init__.py</span> 仅含文档字符串、不做 eager import（惰性导入的关键）。测试生成侧的 <span class="mono">TestsetGenerator.from_langchain</span> / <span class="mono">from_llama_index</span> 在 <span class="mono">testset/synthesizers/generate.py</span>。观测类（Langfuse / MLflow / LangSmith / Helicone / Opik 及 <span class="mono">integrations/tracing/</span>）见下一课。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>集成模块 lazy import</strong>：依赖下沉到各子模块，缺某个框架只影响那一个插头，<strong>不炸整包</strong>。</li>
+    <li><strong>与主流框架双向打通</strong>：既能把框架产物转进来评测，也能把 ragas 指标嵌进框架（如 <span class="inline">EvaluatorChain</span>）。</li>
+    <li><strong>统一落到两种格式</strong>：RAG 类转 <span class="inline">EvaluationDataset</span>、Agent 类转 <span class="inline">Message</span> 列表，复用前面所有指标与实验，无需为每个框架另造评测。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>ragas <strong>不孤立</strong>：<span class="mono">integrations/</span> 把 LangChain / LlamaIndex / LangGraph / Swarm / Bedrock / Griptape / R2R / AG-UI 接进来。</li>
+    <li>两个方向：转 <span class="inline">EvaluationDataset</span> 或 ragas <span class="inline">Message</span> 评测；<span class="inline">TestsetGenerator.from_langchain</span> / <span class="inline">from_llama_index</span> 造测试集。</li>
+    <li>靠<strong>惰性导入</strong>容忍可选依赖：<span class="mono">__init__.py</span> 不 eager import，用哪个插头才导哪个，缺依赖不影响整包。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="33-optimization-training.html"><div class="dir">← 上一课</div><div class="ttl">指标优化与训练</div></a><a class="next" href="35-integrations-observability.html"><div class="dir">下一课 →</div><div class="ttl">集成②：观测</div></a></div>
 </div>

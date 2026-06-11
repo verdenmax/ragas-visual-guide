@@ -267,9 +267,109 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>实验系统深入</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+<a href="08-experiment.html">第 8 课</a>初识了 <span class="inline">@experiment</span>；本课钻进 <span class="mono">experiment.py</span> 把它拆到底：
+<span class="inline">Experiment</span> 本质是一张<strong>挂着 backend 的表</strong>，<span class="inline">arun</span> 负责<strong>取名 → 解析存储 → 并发跑 → 落盘</strong>，
+再加 <span class="inline">version_experiment</span> 的 git 版本化，凑齐"每改一次跑一轮、自动存档、可对比"的评测闭环。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  把评测想成一张<strong>实验台</strong>：每改一次（换 prompt、调检索、换模型）就<strong>跑一轮</strong>，台子自动给这轮<strong>起个好记的名字</strong>、
+  把每行结果<strong>记进档案柜</strong>（backend），还能用 <strong>git 给这版代码盖个时间戳</strong>。下次想比"哪版更好"，翻档案柜即可，不必靠记忆。
+</div>
+
+<h2>Experiment：一张挂着 backend 的表</h2>
+<p><span class="inline">Experiment</span> 的定义短得出奇——它直接继承数据表基类 <span class="inline">DataTable</span>（<a href="06-two-datasets.html">第 6 课</a>），只改了一个类型标记：</p>
+<pre class="code"><span class="kw">class</span> <span class="fn">Experiment</span>(DataTable):
+    DATATABLE_TYPE = <span class="st">"Experiment"</span>   <span class="cm"># 与 Dataset 共用一套表/存储机制</span></pre>
+<p>所以一个实验<strong>就是一张表</strong>：每行是"对一行数据评测后要留痕的结果"。整张表通过 backend 落盘时，
+<span class="inline">save()</span> 会按 <span class="mono">DATATABLE_TYPE</span> 选择存进 <span class="mono">experiments/</span>（调 <span class="mono">save_experiment</span>）还是 <span class="mono">datasets/</span>（调 <span class="mono">save_dataset</span>）——
+于是实验与数据集<strong>同套机制、分开命名空间、互不覆盖</strong>（<a href="32-backends.html">下一课</a>细讲 backend）。</p>
+
+<h2>@experiment 与 arun：装饰器背后的五步</h2>
+<p><span class="inline">@experiment(...)</span> 返回一个 <span class="inline">ExperimentWrapper</span>：它的 <span class="inline">__call__</span> 只是<strong>跑一行</strong>（自动兼容 async / sync），
+真正的"对整张表批量跑"交给 <span class="inline">arun</span>。把源码压扁，<span class="inline">arun</span> 的骨架就是五步：</p>
+<pre class="code"><span class="kw">async def</span> <span class="fn">arun</span>(self, dataset, name=None, backend=None):
+    <span class="cm"># ① 没给名字就生成一个好记的随机名（有 name_prefix 则拼前缀）</span>
+    <span class="kw">if</span> name <span class="kw">is</span> None:
+        name = memorable_names.generate_unique_name()
+
+    <span class="cm"># ② 解析 backend：显式传入 > 装饰器默认 > 回退到 dataset.backend</span>
+    experiment_backend = backend <span class="kw">or</span> self.default_backend
+    <span class="kw">if</span> experiment_backend:
+        resolved_backend = Experiment._resolve_backend(experiment_backend)
+    <span class="kw">else</span>:
+        resolved_backend = dataset.backend
+
+    <span class="cm"># ③ 建一张 Experiment 表</span>
+    experiment_view = Experiment(name=name, data_model=self.experiment_model, backend=resolved_backend)
+
+    <span class="cm"># ④ 每行包成任务，as_completed 并发跑；单行失败只记 warning 不中断</span>
+    tasks = [self(item) <span class="kw">for</span> item <span class="kw">in</span> dataset]
+    <span class="kw">for</span> future <span class="kw">in</span> asyncio.as_completed(tasks):
+        <span class="kw">try</span>:
+            result = <span class="kw">await</span> future
+            <span class="kw">if</span> result <span class="kw">is</span> <span class="kw">not</span> None:
+                experiment_view.append(result)
+        <span class="kw">except</span> Exception <span class="kw">as</span> e:
+            print(<span class="st">f"Warning: Task failed with error: {e}"</span>)
+
+    experiment_view.save()        <span class="cm"># ⑤ 落盘后返回这张表</span>
+    <span class="kw">return</span> experiment_view</pre>
+<p>真实代码里第 ④ 步还套了 <span class="inline">tqdm</span> 进度条（<span class="mono">desc="Running experiment"</span>），并在 <span class="mono">finally</span> 里关闭它。
+注意第 ② 步的<strong>回退链</strong>：什么都不传时实验就<strong>沿用数据集的 backend</strong>，这样"读哪存哪"最省心。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 实验与数据集共用存储，凭什么不会互相覆盖？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 靠 DATATABLE_TYPE 分流</div>
+      <div class="a"><span class="inline">DataTable.save()</span> 检查 <span class="mono">DATATABLE_TYPE</span>：是 <span class="mono">"Experiment"</span> 就调 <span class="inline">backend.save_experiment</span>，否则调 <span class="inline">save_dataset</span>。
+        文件型 backend 把两者分别放进 <span class="mono">experiments/</span> 与 <span class="mono">datasets/</span> 两个子目录，<strong>同名也不打架</strong>。读取时同理（<span class="inline">load_experiment</span> / <span class="inline">load_dataset</span>）。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 单行抛错会让整轮白跑吗</div>
+      <div class="a">不会。<span class="inline">as_completed</span> 循环里逐个 <span class="inline">await</span>，单个任务的异常被 <span class="mono">try/except</span> 捕获、打印一条 warning 后<strong>继续</strong>——
+        其余行照常写入、照常 <span class="inline">save()</span>。这与 <a href="07-evaluate.html">evaluate</a> 的"失败记 NaN"是同一种"整批不被一行拖垮"的容错哲学。</div>
+    </div>
+  </div>
+</details>
+
+<h2>version_experiment：把实验钉在某次代码上</h2>
+<p>结果存进 backend 解决了"这轮跑出什么"；<span class="inline">version_experiment(name)</span> 解决"这轮对应哪段代码"。它需要 GitPython（<span class="mono">pip install ragas[git]</span>），步骤是：</p>
+<ol>
+  <li>定位仓库：没给 <span class="mono">repo_path</span> 就用 <span class="inline">find_git_root()</span> 找仓库根。</li>
+  <li>暂存改动：默认只暂存<strong>已跟踪</strong>文件（<span class="mono">git add -u</span>）；<span class="mono">stage_all=True</span> 则连未跟踪文件一起（<span class="mono">git add .</span>）。</li>
+  <li>提交：默认消息 <span class="mono">Experiment: {name}</span>；若没有任何改动，则直接用当前 <span class="mono">HEAD</span> 的 commit。</li>
+  <li>建分支：<span class="mono">create_branch=True</span> 时创建分支 <span class="mono">ragas/{name}</span>，最后返回 commit hash。</li>
+</ol>
+<p>于是每个实验名都能<strong>回溯到确切的代码快照</strong>：结果在 backend、代码在 git 分支，两边用同一个 <span class="mono">name</span> 串起来。</p>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  全在 <span class="mono">src/ragas/experiment.py</span>：<span class="mono">experiment(experiment_model, backend, name_prefix)</span> 装饰器返回 <span class="mono">ExperimentWrapper</span>；
+  <span class="mono">ExperimentWrapper.__call__</span> 跑一行（<span class="mono">asyncio.iscoroutinefunction</span> 兼容 async/sync），<span class="mono">arun</span> 负责取名（<span class="mono">memorable_names.generate_unique_name</span>）/ 解析 backend（<span class="mono">Experiment._resolve_backend</span>，回退 <span class="mono">dataset.backend</span>）/ 建 <span class="mono">Experiment</span> / <span class="mono">asyncio.as_completed</span> + <span class="mono">tqdm</span> 并发 / <span class="mono">save</span>。
+  <span class="mono">Experiment(DataTable)</span> 只设 <span class="mono">DATATABLE_TYPE="Experiment"</span>；存储分流逻辑在 <span class="mono">dataset.py</span> 的 <span class="mono">DataTable.save</span>。<span class="mono">version_experiment</span> 用 GitPython 提交并建 <span class="mono">ragas/{name}</span> 分支。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>结果落 backend + git 版本化 = 真正的评测闭环</strong>：每轮的<strong>产物</strong>进档案柜、<strong>代码</strong>进 git 分支，用同一个实验名挂钩，随时回看与对比。</li>
+    <li><strong>arun 天然并发</strong>：<span class="inline">asyncio.as_completed</span> 并发跑所有行、<span class="inline">tqdm</span> 显示进度，单行失败只记 warning 不中断整轮。</li>
+    <li><strong>Experiment 复用 DataTable</strong>：实验不另起炉灶，而是"一张特殊类型的表"，自动享受 backend 的存取与 <span class="mono">to_pandas</span> 等能力。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li><strong>实验 = 跑一轮 + 存档 + 可对比</strong>：<span class="inline">Experiment</span> 是挂着 backend 的 <span class="mono">DataTable</span>，每行一个留痕结果。</li>
+    <li><span class="inline">arun</span> 五步：<strong>取名 → 解析 backend（回退 dataset.backend）→ 建表 → as_completed 并发 → save</strong>。</li>
+    <li><span class="inline">version_experiment</span> 用 git 把实验钉在代码快照上（分支 <span class="mono">ragas/{name}</span>），结果与代码两边对齐。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="30-testset-generator.html"><div class="dir">← 上一课</div><div class="ttl">TestsetGenerator 端到端</div></a><a class="next" href="32-backends.html"><div class="dir">下一课 →</div><div class="ttl">Backends 可插拔</div></a></div>
 </div>
