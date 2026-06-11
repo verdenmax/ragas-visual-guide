@@ -412,6 +412,7 @@ def page(filename, content, standalone=False, home_href=None):
   </div>
   {content}
   <div class="footnav">{prev_link}{next_link}</div>
+  <p style="margin:1.6rem 0 0;color:var(--faint);font-size:.8rem;text-align:center">📌 对照 ragas 当前 <strong>main</strong> 源码讲解 · 最后核验 2026-06 · 源码引用以"文件 + 符号名"为主（行号会随上游更新而变）</p>
 </div>
 {script_tag}
 </body></html>"""

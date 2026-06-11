@@ -56,7 +56,7 @@ print(score.value, score.reason)  <span class="cm"># 'accurate' + 给分理由</
   <div class="tag">🔬 源码对应</div>
   公开入口集中在 <span class="mono">src/ragas/__init__.py</span>：评测用 <span class="mono">evaluate</span>/<span class="mono">aevaluate</span>，
   实验用 <span class="mono">experiment</span>/<span class="mono">Experiment</span>，数据用 <span class="mono">Dataset</span>/<span class="mono">EvaluationDataset</span>。
-  指标从子模块导入（如 <span class="mono">from ragas.metrics import Faithfulness</span>）。介绍见 <span class="mono">README.md</span> 与 <span class="mono">docs/index.md</span>。
+  指标从子模块导入（如 <span class="mono">from ragas.metrics.collections import Faithfulness</span>；旧写法 <span class="mono">from ragas.metrics import Faithfulness</span> 已废弃，详见<a href="09-metrics-overview.html">第 9 课</a>）。介绍见 <span class="mono">README.md</span> 与 <span class="mono">docs/index.md</span>。
 </div>
 
 <div class="card spark">
