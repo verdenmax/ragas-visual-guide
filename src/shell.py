@@ -512,12 +512,12 @@ def index_page(standalone=False, lesson_prefix=""):
       <span><i style="background:var(--accent)"></i>关键要点</span>
     </div>
     <div style="margin-top:1.1rem">
-      <a href="ragas-visual-guide.pdf" class="pdf-btn">📄 下载完整 PDF（全 39 课）</a>
+      <a href="ragas-visual-guide.pdf" class="pdf-btn">📄 下载完整 PDF（全 {len(PAGES)} 课）</a>
     </div>
     <p style="margin:.8rem 0 0;color:var(--faint);font-size:.8rem">📌 对照 ragas 当前 <strong>main</strong> 源码讲解 · 最后核验 2026-06 · 源码引用以"文件 + 符号名"为主（行号会随上游更新而变）</p>
   </div>
   <div class="toc-search">
-    <input id="q" type="search" placeholder="🔎 搜索课程：标题 / 关键词（如 RAG、Pregel、中间件）" autocomplete="off" aria-label="搜索课程">
+    <input id="q" type="search" placeholder="🔎 搜索课程：标题 / 关键词（如 指标、测试集、Faithfulness）" autocomplete="off" aria-label="搜索课程">
     <span class="qcount" id="qcount"></span>
   </div>
   <div class="toc">{toc}</div>
