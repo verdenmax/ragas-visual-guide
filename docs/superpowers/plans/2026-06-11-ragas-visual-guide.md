@@ -357,7 +357,7 @@ git commit -m "feat: scaffold registry + part stubs + quizzes; green empty-shell
 
 - 卡片：`card macro`(🌍)、`card detail`(🔬)、`card analogy`(🧩)、`card key`(✅)、`card spark`(💡)、`card warn`(⚠️)
 - 折叠：`<details class="accordion"><summary><span class="badge-num">1</span> 标题 <span class="hint">点击展开详解</span></summary><div class="acc-body"><div class="qa"><div class="q">🧪 示例</div><div class="a"> … </div></div></div></details>`
-- 代码块：`<pre class="code"><span class="cm"># 注释</span>\n<span class="kw">from</span> ragas <span class="kw">import</span> evaluate</pre>`；行内 `<span class="inline">x</span>` 或 `<span class="mono">x</span>`
+- 代码块：`<pre class="code"><span class="cm"># 注释</span>\n<span class="kw">from</span> ragas <span class="kw">import</span> evaluate</pre>`；行内代码二选一并保持一致：`<span class="inline">x</span>` 用于**正文里强调符号/标识符**（chip 样式），`<span class="mono">x</span>` 用于**文件路径、源码对应卡片、表格里的符号**（等宽）。
 - 表格：`<table class="t"><tr><th>…</th></tr><tr><td>…</td></tr></table>`
 
 **编写纪律（硬性）：**
