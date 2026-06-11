@@ -189,7 +189,7 @@ cp build.py build_print.py check_html.py check_links.py \
 
 - [ ] **Step 3: `build_print.py` 改标题/封面/PDF 名**
 
-把封面 `<h1>LangChain 图解教程</h1>` → `<h1>Ragas 图解教程</h1>`；封面 `sub` 改为 `从零理解整个 ragas · 宏观 → 用法 → 源码内部 → 测试生成 → 实战`；`<title>` 与 docstring 里的 `langchain-visual-guide.pdf` → `ragas-visual-guide.pdf`；封面 `meta` 的"每课配真实代码对应与设计亮点"保留。
+把封面 `<h1>LangChain 图解教程</h1>` → `<h1>Ragas 图解教程</h1>`；封面 emoji `📘` → `📊`（与站点品牌一致）；封面 `sub` 改为 `从零理解整个 ragas · 宏观 → 用法 → 源码内部 → 测试生成 → 实战`；`<title>` 与 docstring 里的 `langchain-visual-guide.pdf` → `ragas-visual-guide.pdf`；封面 `meta` 的"每课配真实代码对应与设计亮点"保留。
 
 - [ ] **Step 4: `check_links.py` 改放行的 PDF 名**
 
