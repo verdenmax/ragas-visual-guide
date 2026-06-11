@@ -267,9 +267,111 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>项目全景</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+拉远镜头看 ragas：它不是一个大文件，而是一座分工明确的"评测工厂"。本课给你一张<strong>子包地图</strong>，
+认清顶层公开 API 暴露了什么、各子包各管一摊什么活，以及贯穿全书的<strong>两条主线</strong>。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  ragas 像一座<strong>评测工厂</strong>：<strong>原料区</strong>是数据（<span class="inline">Dataset</span> / <span class="inline">EvaluationDataset</span>），
+  <strong>质检线</strong>是指标（<span class="inline">metrics</span>），<strong>自动出题车间</strong>是测试集生成（<span class="inline">testset</span>），
+  <strong>实验台</strong>是 <span class="inline">experiment</span>，而<strong>水电基建</strong>是 LLM、Embedding 与执行引擎（<span class="inline">llms</span> / <span class="inline">embeddings</span> / <span class="inline">executor</span>）。
+  逛工厂前先拿张地图，才不会在车间里迷路。
+</div>
+
+<h2>顶层公开 API：小而稳的门面</h2>
+<p>打开 <span class="mono">src/ragas/__init__.py</span>，<span class="inline">__all__</span> 只导出最常用的"门面"对象——
+入口、数据模型、实验与少量基建，<strong>刻意不</strong>把成百上千个指标、各种 LLM / Embedding 包装类塞进顶层：</p>
+
+<table class="t">
+  <tr><th>类别</th><th>顶层可直接 import 的名字</th></tr>
+  <tr><td><strong>评测入口</strong></td><td><span class="mono">evaluate</span>, <span class="mono">aevaluate</span></td></tr>
+  <tr><td><strong>实验入口</strong></td><td><span class="mono">experiment</span>, <span class="mono">Experiment</span>, <span class="mono">version_experiment</span></td></tr>
+  <tr><td><strong>数据模型</strong></td><td><span class="mono">Dataset</span>, <span class="mono">DataTable</span>, <span class="mono">EvaluationDataset</span>, <span class="mono">SingleTurnSample</span>, <span class="mono">MultiTurnSample</span></td></tr>
+  <tr><td><strong>基建 / 配置</strong></td><td><span class="mono">RunConfig</span>, <span class="mono">backends</span>, <span class="mono">cacher</span>, <span class="mono">CacheInterface</span>, <span class="mono">DiskCacheBackend</span>, tokenizers</td></tr>
+</table>
+
+<p>那指标和模型从哪来？答案是<strong>按需从子模块导入</strong>，例如：</p>
+<pre class="code"><span class="kw">from</span> ragas <span class="kw">import</span> evaluate, EvaluationDataset   <span class="cm"># 顶层：入口 + 数据</span>
+<span class="kw">from</span> ragas.metrics <span class="kw">import</span> Faithfulness        <span class="cm"># 子模块：指标</span>
+<span class="kw">from</span> ragas.llms <span class="kw">import</span> llm_factory           <span class="cm"># 子模块：LLM 抽象</span></pre>
+<p>顶层只放"人人都要用"的东西，把庞杂的实现关进子包，<strong>公开面越小越稳</strong>，升级时也更不容易误伤用户代码。</p>
+
+<h2>子包地图：各管一摊</h2>
+<table class="t">
+  <tr><th>子包 / 模块</th><th>一句话职责</th></tr>
+  <tr><td class="mono">metrics/</td><td>内置指标与 <span class="mono">Metric</span> 基类体系（Faithfulness、ContextPrecision…）</td></tr>
+  <tr><td class="mono">testset/</td><td>从文档自动造测试集（知识图谱 → Transforms → Synthesizers）</td></tr>
+  <tr><td class="mono">llms/</td><td>LLM 抽象与包装（<span class="mono">llm_factory</span>、<span class="mono">BaseRagasLLM</span>）</td></tr>
+  <tr><td class="mono">embeddings/</td><td>Embedding 抽象与包装（<span class="mono">embedding_factory</span>）</td></tr>
+  <tr><td class="mono">prompt/</td><td>结构化 Prompt 系统（<span class="mono">PydanticPrompt</span>）</td></tr>
+  <tr><td class="mono">backends/</td><td>可插拔存储后端（CSV / JSONL / 内存…），给数据与实验落盘</td></tr>
+  <tr><td class="mono">integrations/</td><td>与 LangChain、LlamaIndex、观测工具等框架的集成</td></tr>
+  <tr><td class="mono">optimizers/</td><td>指标的提示优化 / 训练</td></tr>
+  <tr><td class="mono">evaluation.py</td><td>经典评测入口 <span class="mono">evaluate</span> / <span class="mono">aevaluate</span></td></tr>
+  <tr><td class="mono">experiment.py</td><td>现代实验入口 <span class="mono">@experiment</span> / <span class="mono">Experiment</span></td></tr>
+  <tr><td class="mono">executor.py</td><td>异步执行引擎 <span class="mono">Executor</span>（并发跑任务）</td></tr>
+  <tr><td class="mono">dataset.py</td><td><span class="mono">Dataset</span> / <span class="mono">DataTable</span>：实验数据容器</td></tr>
+  <tr><td class="mono">dataset_schema.py</td><td>样本与结果模型（<span class="mono">SingleTurnSample</span>、<span class="mono">EvaluationDataset</span>、<span class="mono">EvaluationResult</span>）</td></tr>
+  <tr><td class="mono">callbacks.py</td><td>链式回调与追踪（<span class="mono">new_group</span>、<span class="mono">RagasTracer</span>）</td></tr>
+  <tr><td class="mono">cost.py</td><td>token 成本统计（<span class="mono">CostCallbackHandler</span>）</td></tr>
+  <tr><td class="mono">cache.py</td><td>结果缓存（<span class="mono">CacheInterface</span>、<span class="mono">DiskCacheBackend</span>、<span class="mono">cacher</span>）</td></tr>
+</table>
+
+<h2>两条主线：评测线 vs 测试生成线</h2>
+<p>整座工厂的物流其实只有两条主线，后面各部分都是在这两条线上做深挖：</p>
+<ul>
+  <li><strong>评测线</strong>：已经有数据 → 用 <span class="inline">metrics</span> 打分 → <span class="inline">evaluate</span> / <span class="inline">@experiment</span> 跑出结果（<a href="07-evaluate.html">第 7 课</a>、<a href="08-experiment.html">第 8 课</a>）。</li>
+  <li><strong>测试生成线</strong>：只有文档、还没数据 → 用 <span class="inline">testset</span> 自动造测试集，再回到评测线（<a href="25-testgen-overview.html">第 25 课</a>起的第六部分）。</li>
+</ul>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> experimental 为什么要"惰性加载"？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 ragas.experimental 是怎么暴露的</div>
+      <div class="a"><span class="inline">__init__.py</span> 没有直接 import 它，而是用模块级 <span class="inline">__getattr__</span> 拦截属性访问：只有当你真的写 <span class="mono">ragas.experimental</span> 时，才去 import 背后的 <span class="mono">ragas_experimental</span> 包。
+<pre class="code"><span class="kw">def</span> <span class="fn">__getattr__</span>(name):
+    <span class="kw">if</span> name == <span class="st">"experimental"</span>:
+        <span class="kw">try</span>:
+            <span class="kw">import</span> ragas_experimental <span class="kw">as</span> experimental
+            <span class="kw">return</span> experimental
+        <span class="kw">except</span> ImportError:
+            <span class="kw">raise</span> ImportError(<span class="st">"ragas.experimental requires installation: ..."</span>)</pre>
+      </div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 这样设计的好处</div>
+      <div class="a">没装可选依赖时，<strong>导入 ragas 本身不会报错</strong>；只有用到实验功能才触发安装提示，错误信息还直接告诉你 <span class="mono">pip install ragas[experimental]</span>。按需付费，缺啥提示啥。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  顶层门面定义在 <span class="mono">src/ragas/__init__.py</span>：<span class="mono">__all__</span> 列出对外导出的名字，模块级 <span class="mono">__getattr__</span> 负责惰性加载 <span class="mono">experimental</span>（实际导入 <span class="mono">ragas_experimental</span>）。
+  各子包分别在 <span class="mono">metrics/</span>、<span class="mono">testset/</span>、<span class="mono">llms/</span>、<span class="mono">embeddings/</span>、<span class="mono">prompt/</span>、<span class="mono">backends/</span>、<span class="mono">integrations/</span>、<span class="mono">optimizers/</span> 目录下；
+  核心模块为 <span class="mono">evaluation.py</span>、<span class="mono">experiment.py</span>、<span class="mono">executor.py</span>、<span class="mono">dataset.py</span>、<span class="mono">dataset_schema.py</span>、<span class="mono">callbacks.py</span>、<span class="mono">cost.py</span>、<span class="mono">cache.py</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>公开面小而稳</strong>：<span class="inline">__all__</span> 只导核心入口与数据模型，指标 / 模型一律从子模块按需导入，降低耦合、减少升级时的破坏性变更。</li>
+    <li><strong>惰性加载可选功能</strong>：<span class="inline">experimental</span> 用模块级 <span class="inline">__getattr__</span> 按需加载，缺依赖时抛出带安装指引的清晰 <span class="inline">ImportError</span>，而不是在 import 阶段就崩。</li>
+    <li><strong>关注点分离</strong>：每个子包各管一摊（数据 / 指标 / 出题 / 模型 / 基建），地图清晰、按图索骥。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>顶层 <span class="mono">__init__.py</span> 只暴露<strong>核心门面</strong>；指标与模型从 <span class="mono">ragas.metrics</span>、<span class="mono">ragas.llms</span> 等<strong>子模块</strong>导入。</li>
+    <li>记住<strong>子包地图</strong>：metrics / testset / llms / embeddings / prompt / backends / integrations / optimizers + 一组核心模块。</li>
+    <li>分清<strong>两条主线</strong>——评测线 vs 测试生成线；后续每一课都按这张图展开。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="01-what-is-ragas.html"><div class="dir">← 上一课</div><div class="ttl">Ragas 是什么</div></a><a class="next" href="03-evaluation-lifecycle.html"><div class="dir">下一课 →</div><div class="ttl">一次评测的生命周期</div></a></div>
 </div>

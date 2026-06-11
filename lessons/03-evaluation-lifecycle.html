@@ -267,9 +267,86 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>一次评测的生命周期</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+当你写下 <span class="inline">evaluate(dataset, metrics)</span>，幕后到底发生了什么？本课把一次评测拆成
+<strong>6 个步骤</strong>，看清数据如何从"一摞样本"变成"一张成绩单"。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  一次评测就像<strong>考试阅卷</strong>：<strong>试卷</strong>是样本（samples），<strong>评分标准</strong>是指标（metrics），
+  把"每份试卷 × 每条标准"拆成一道道独立的判分任务，交给<strong>一屋子阅卷老师并发批改</strong>（<span class="inline">Executor</span>），
+  最后把零散分数<strong>汇总成一张成绩单</strong>（<span class="inline">EvaluationResult</span>）。
+</div>
+
+<h2>生命周期：从样本到成绩单的 6 步</h2>
+<p><span class="inline">evaluate()</span> 只是同步外壳，真正干活的是 <span class="inline">aevaluate()</span>。它依次做这 6 件事：</p>
+
+<table class="t">
+  <tr><th>#</th><th>步骤</th><th>发生了什么</th><th>源码符号</th></tr>
+  <tr><td>1</td><td><strong>选指标</strong></td><td>没传 <span class="mono">metrics</span> 时，用一组默认 RAG 指标兜底</td><td class="mono">aevaluate()</td></tr>
+  <tr><td>2</td><td><strong>规整数据</strong></td><td>HuggingFace <span class="mono">Dataset</span> 先列名重映射、v1→v2 并转成 <span class="mono">EvaluationDataset</span>；随后统一校验必需列与指标是否支持</td><td class="mono">EvaluationDataset.from_list</td></tr>
+  <tr><td>3</td><td><strong>注入模型并初始化</strong></td><td>给需要的指标补上 LLM / Embedding（默认 <span class="mono">gpt-4o-mini</span>），逐个调用 <span class="mono">metric.init()</span></td><td class="mono">metric.init(run_config)</td></tr>
+  <tr><td>4</td><td><strong>拆任务并提交</strong></td><td>对每个"样本 × 指标"提交一道异步打分任务（单轮 / 多轮各走对应方法）</td><td class="mono">executor.submit(...)</td></tr>
+  <tr><td>5</td><td><strong>并发执行</strong></td><td>引擎并发跑完所有任务，按提交顺序收回一维结果列表</td><td class="mono">await executor.aresults()</td></tr>
+  <tr><td>6</td><td><strong>汇总成绩单</strong></td><td>把一维列表按行还原成"每行一套分数"，封装为结果对象</td><td class="mono">EvaluationResult</td></tr>
+</table>
+
+<p>第 4 步按样本类型分流：<span class="inline">SingleTurnSample</span> 调 <span class="inline">single_turn_ascore</span>，
+<span class="inline">MultiTurnSample</span> 调 <span class="inline">multi_turn_ascore</span>；每道任务命名为 <span class="mono">f"{metric.name}-{i}"</span>。
+若传入 <span class="inline">return_executor=True</span>，则在第 4 步后<strong>直接把 <span class="mono">Executor</span> 交还给你</strong>（可手动 <span class="mono">cancel()</span> / 取结果），不再自动跑完。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 一维结果怎么还原成每行分数？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 扁平列表 → 二维成绩单</div>
+      <div class="a">任务是按"行优先"提交的，所以第 <span class="inline">i</span> 行、第 <span class="inline">j</span> 个指标的结果就落在扁平列表的 <span class="mono">len(metrics) * i + j</span> 位置。汇总时再按这个公式取回来：
+<pre class="code"><span class="kw">for</span> i, _ <span class="kw">in</span> enumerate(dataset):
+    s = {}
+    <span class="kw">for</span> j, m <span class="kw">in</span> enumerate(metrics):
+        s[m.name] = results[len(metrics) * i + j]
+    scores.append(s)   <span class="cm"># 每行一个 {指标名: 分数} 字典</span></pre>
+      </div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ EvaluationResult 收到后做什么</div>
+      <div class="a">它的 <span class="inline">__post_init__</span> 把"每行一个字典"<strong>透视</strong>成"每个指标一列分数"（<span class="mono">_scores_dict</span>），再用 <span class="inline">safe_nanmean</span> 算每个指标的均值——这就是 <span class="mono">print(result)</span> 看到的 <span class="mono">{'faithfulness': 0.89, ...}</span>。<span class="inline">safe_nanmean</span> 会忽略 <span class="mono">NaN</span>，所以个别失败行不会拖垮整体均值。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card warn">
+  <div class="tag">⚠️ 为何官方转向 @experiment</div>
+  从源码看，<span class="inline">evaluate()</span> 与 <span class="inline">aevaluate()</span> <strong>都会发出 <span class="mono">DeprecationWarning</span></strong>，提示"请改用 <span class="mono">@experiment</span> 装饰器"。
+  评测只是"打一次分"，而实验把"改动 → 跑分 → 留痕对比"固化成闭环，更贴合工程迭代。具体用法见 <a href="08-experiment.html">第 8 课</a>。
+</div>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  主流程在 <span class="mono">src/ragas/evaluation.py</span>：<span class="mono">aevaluate</span> 是 async 真实现、<span class="mono">evaluate</span> 是同步包装，二者均 <span class="mono">warnings.warn(..., DeprecationWarning)</span>；
+  未传 metrics 时默认用 <span class="mono">answer_relevancy, context_precision, faithfulness, context_recall</span> 四个 RAG 指标。
+  并发引擎为 <span class="mono">executor.py</span> 的 <span class="mono">Executor</span>（<span class="mono">submit</span> / <span class="mono">aresults</span>）；成绩单为 <span class="mono">dataset_schema.py</span> 的 <span class="mono">EvaluationResult</span>（<span class="mono">__post_init__</span> 透视 + <span class="mono">safe_nanmean</span> 求均值）；
+  追踪树由 <span class="mono">callbacks.py</span> 的 <span class="mono">new_group</span> 按 evaluation → row 逐层建立。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>async-first</strong>：<span class="inline">aevaluate</span> 是真正的异步实现，<span class="inline">evaluate</span> 只是套了层同步外壳（必要时借 <span class="mono">nest_asyncio</span> 兼容 Jupyter）。</li>
+    <li><strong>天然并发</strong>：每个"样本 × 指标"都是<strong>独立任务</strong>，提交后由 <span class="inline">Executor</span> 并发执行，再按提交顺序排回原位。</li>
+    <li><strong>失败不中断整轮</strong>：单个任务抛错会被转成 <span class="mono">np.nan</span> 而非崩掉全程（默认 <span class="mono">raise_exceptions=False</span>，细节见 <a href="23-executor.html">第 23 课</a>）。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>记住生命周期 <strong>6 步</strong>：默认指标 → 规整数据 → 注入模型并 init → 拆任务提交 → 并发执行 → 汇总成 <span class="mono">EvaluationResult</span>。</li>
+    <li><span class="mono">evaluate</span> / <span class="mono">aevaluate</span> <strong>均已废弃</strong>（发 <span class="mono">DeprecationWarning</span>），官方指向 <span class="mono">@experiment</span>。</li>
+    <li>下一部分深入"<strong>数据与入口</strong>"：样本模型、两个 Dataset 之辨与两个入口的用法。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="02-architecture.html"><div class="dir">← 上一课</div><div class="ttl">项目全景</div></a><a class="next" href="04-single-turn-sample.html"><div class="dir">下一课 →</div><div class="ttl">数据模型①：SingleTurnSample</div></a></div>
 </div>
