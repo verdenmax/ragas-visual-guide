@@ -150,7 +150,7 @@ PAGES = [
 
 - [ ] **Step 6: 改 `index_page()` 的版本锚点与 PDF 链接**
 
-PDF 按钮 `href` 改为 `ragas-visual-guide.pdf`、文案 `📄 下载完整 PDF（全 39 课）`；版本锚点段落改为：
+PDF 按钮 `href` 改为 `ragas-visual-guide.pdf`、文案 `📄 下载完整 PDF（全 {len(PAGES)} 课）`（用动态计数，勿写死 39）；版本锚点段落改为：
 
 ```html
 📌 对照 ragas 当前 <strong>main</strong> 源码讲解 · 最后核验 2026-06 · 源码引用以"文件 + 符号名"为主（行号会随上游更新而变）
