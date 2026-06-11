@@ -362,7 +362,35 @@ ds = Dataset(name=<span class="st">"qa"</span>, backend=<span class="st">"local/
     <li>记住<strong>注册机制</strong>：entry-points 组 <span class="mono">"ragas.backends"</span> 让第三方 backend 自动被发现，无需改 ragas。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. ragas 让你用字符串 <code>'local/csv'</code> 选后端，而不是直接 import 具体后端类，好处是什么？</div>
+  <ol class="opts">
+    <li>因为 import 后端类一定会报错</li>
+    <li>解耦：调用方只依赖一个名字，<code>get_registry</code> 按名查找；换实现 / 加新后端都不必改用户代码</li>
+    <li>因为 csv 是唯一被支持的后端</li>
+    <li>因为字符串写起来比类名短</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。<code>BaseBackend</code> 统一了 load / save 接口，<code>get_registry</code> 用字符串解析到具体实现；用户代码只写一个名字，背后换 csv / jsonl / 内存 / 网盘都无感——实现可换、可插。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. 第三方通过 pyproject 的 entry-points 注册自己的 backend，核心价值在哪？</div>
+  <ol class="opts">
+    <li>一个 entry-point 只能注册一个后端，没别的用处</li>
+    <li>必须先 fork ragas 源码才能加后端</li>
+    <li>注册后会覆盖掉所有内置后端</li>
+    <li><code>pip install</code> 带 entry-point 的包后，注册表启动一扫即发现，无需改 ragas 一行即可即插即用</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。entry-points 是标准插件发现机制：别人把后端打成包发布，你装上 ragas 就认得。对扩展开放、对修改封闭——这正是统一 <code>BaseBackend</code> 接口换来的红利。</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="31-experiments-deep.html"><div class="dir">← 上一课</div><div class="ttl">实验系统深入</div></a><a class="next" href="33-optimization-training.html"><div class="dir">下一课 →</div><div class="ttl">指标优化与训练</div></a></div>
 </div>
 

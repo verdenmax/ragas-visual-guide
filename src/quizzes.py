@@ -851,6 +851,223 @@ QUIZZES = {
             "你用 <code>generate_with_langchain_docs</code> 造好了一批测试集，准备 <code>to_evaluation_dataset()</code> 回到评测线。在正式拿它当「考卷」前，你会做哪些抽检来确认这批自动生成的题目值得信任？",
         ],
     },
+    "31-experiments-deep.html": {
+        "mcq": [
+            {
+                "q": "<code>@experiment</code> 的 <code>arun</code> 为什么用 <code>asyncio.as_completed</code> 并发跑每一行，而不是顺序逐行评测？",
+                "opts": [
+                    "每行评测都是独立的 IO 密集调用（等 LLM / 检索），并发能榨干等待时间、谁先完成先收谁",
+                    "因为 <code>as_completed</code> 能让评测过程不调用 LLM",
+                    "因为顺序执行会导致结果无法 <code>save</code> 落盘",
+                    "因为 <code>asyncio</code> 是唯一能写文件的方式",
+                ],
+                "answer": 0,
+                "why": "<code>arun</code> 把每行的「调你的 RAG + 打分」包成协程，用 <code>asyncio.as_completed</code> 并发——这些任务大多在等 LLM / 检索返回，属 IO 密集，并发把等待时间利用起来；顺序跑只会白白空等。",
+            },
+            {
+                "q": "<code>version_experiment</code> 为什么要用 git 给每次实验单独建一个 <code>ragas/{name}</code> 分支？",
+                "opts": [
+                    "因为建分支能让实验跑得更快",
+                    "因为不建分支就解析不出 backend",
+                    "给「这版代码跑出这版结果」拍不可变快照，可回溯、可对比，把「改→跑→比」闭成环",
+                    "因为 git 是 ragas 唯一的存储后端",
+                ],
+                "answer": 2,
+                "why": "把每次实验版本化成 <code>ragas/{name}</code> 分支，等于给代码与结果拍快照；日后随时切回任一版做对比，评测因此成为可复现、可迭代的闭环——这正是 experiments-first 的落点。",
+            },
+        ],
+        "open": [
+            "你给同一个 RAG 先后跑了 v1 / v2 两次 <code>@experiment</code>，分数互有高低。借助 <code>version_experiment</code> 的 git 分支，你会怎样组织这两次实验，才能既快速并排对比分数、又能随时切回任一版的代码与数据？",
+        ],
+    },
+    "32-backends.html": {
+        "mcq": [
+            {
+                "q": "ragas 让你用字符串 <code>'local/csv'</code> 选后端，而不是直接 import 具体后端类，好处是什么？",
+                "opts": [
+                    "因为字符串写起来比类名短",
+                    "解耦：调用方只依赖一个名字，<code>get_registry</code> 按名查找；换实现 / 加新后端都不必改用户代码",
+                    "因为 import 后端类一定会报错",
+                    "因为 csv 是唯一被支持的后端",
+                ],
+                "answer": 1,
+                "why": "<code>BaseBackend</code> 统一了 load / save 接口，<code>get_registry</code> 用字符串解析到具体实现；用户代码只写一个名字，背后换 csv / jsonl / 内存 / 网盘都无感——实现可换、可插。",
+            },
+            {
+                "q": "第三方通过 pyproject 的 entry-points 注册自己的 backend，核心价值在哪？",
+                "opts": [
+                    "必须先 fork ragas 源码才能加后端",
+                    "注册后会覆盖掉所有内置后端",
+                    "一个 entry-point 只能注册一个后端，没别的用处",
+                    "<code>pip install</code> 带 entry-point 的包后，注册表启动一扫即发现，无需改 ragas 一行即可即插即用",
+                ],
+                "answer": 3,
+                "why": "entry-points 是标准插件发现机制：别人把后端打成包发布，你装上 ragas 就认得。对扩展开放、对修改封闭——这正是统一 <code>BaseBackend</code> 接口换来的红利。",
+            },
+        ],
+    },
+    "33-optimization-training.html": {
+        "mcq": [
+            {
+                "q": "<code>MetricWithLLM.train</code> 为什么要从人工标注（<code>MetricAnnotation</code>）里学，而不是凭空优化？",
+                "opts": [
+                    "以人类判断为「金标准」对齐：优化指令 + 挑 few-shot 示例，让 LLM 裁判与人类打分的相关性更高",
+                    "因为有了标注就不必再调用 LLM",
+                    "因为没有标注在技术上无法启动训练",
+                    "因为标注只是用来让训练更快收敛",
+                ],
+                "answer": 0,
+                "why": "<code>train</code> 拿人工标注当目标，去优化 prompt 指令、挑选 few-shot 示例，并用「与人类标注的相关性」衡量好坏——让 LLM 裁判一步步贴近人类判断，这才是优化指标的意义。",
+            },
+            {
+                "q": "<code>train</code> 为什么按指标的 <code>output_type</code> 自动挑损失函数（BINARY→<code>BinaryMetricLoss</code>，连续 / 离散→<code>MSELoss</code>）？",
+                "opts": [
+                    "因为损失函数随便选结果都一样",
+                    "因为 <code>MSELoss</code> 根本不能用于任何指标",
+                    "不同输出类型「错得有多离谱」的度量方式不同，选对 loss 才能给优化器正确的方向",
+                    "因为这样能少装一个依赖",
+                ],
+                "answer": 2,
+                "why": "二分类的对 / 错与连续值的偏差，本质是两种误差度量；按 <code>output_type</code> 自动选 loss，<code>GeneticOptimizer</code>（默认）/ <code>DSPyOptimizer</code> 才能拿到合理的适应度信号，把指标往「更像人」推。",
+            },
+        ],
+    },
+    "34-integrations-frameworks.html": {
+        "mcq": [
+            {
+                "q": "各框架集成为什么把它依赖的第三方库 import 下沉到各自子模块，而不在 <code>integrations</code> 包顶层统一导入？",
+                "opts": [
+                    "因为 Python 顶层模块里不允许写 import",
+                    "因为这样能让所有集成都跑得更快",
+                    "「按插头分装」：缺某框架的依赖只断那一路集成，不会让整个 <code>integrations</code> 包 import 失败",
+                    "因为各框架依赖之间一定会互相覆盖",
+                ],
+                "answer": 2,
+                "why": "把 import 下沉到子模块，每个集成各管各的依赖——没装 <code>llama_index</code> 不影响你用 <code>langchain</code> 集成。可选能力按需加载，缺哪个插头只断哪一路，这与 backend 的可选导入一脉相承。",
+            },
+            {
+                "q": "<code>TestsetGenerator.from_langchain</code> / <code>from_llama_index</code> 这类入口体现了什么设计意图？",
+                "opts": [
+                    "接住各框架的文档 / 对象，转成 ragas 能用的输入，让你在原有生态里平滑接入测试生成",
+                    "强迫用户放弃原框架、把数据全部重写一遍",
+                    "因为 ragas 只能读这两个框架的数据",
+                    "因为不提供入口就根本无法生成测试集",
+                ],
+                "answer": 0,
+                "why": "<code>from_langchain</code> / <code>from_llama_index</code> 把别家的文档对象「翻译」成 ragas 的输入——你不必离开熟悉的框架，集成层替你做适配，接入成本因此很低。",
+            },
+        ],
+        "open": [
+            "你的应用基于 LlamaIndex，同事的服务却用 LangGraph。结合 ragas 各集成「依赖各自下沉、互不拖累」的设计，你会怎样在一个仓库里同时评测这两套，又尽量避免依赖互相打架？",
+        ],
+    },
+    "35-integrations-observability.html": {
+        "mcq": [
+            {
+                "q": "把评测过程上报到 Langfuse / MLflow / LangSmith 这类观测平台，主要解决什么问题？",
+                "opts": [
+                    "让评测从此不再需要数据集",
+                    "让每次评测的每一步可视化、可回溯，便于在生产级大盘上定位薄弱环节",
+                    "让指标分数自动变高",
+                    "让评测彻底离线、不留任何记录",
+                ],
+                "answer": 1,
+                "why": "<code>observe</code> 把评测的调用链与分数上报到专业大盘，评测从「黑盒跑完给个数」变成「每步可视、可回溯」——这正是生产环境排查与监控所需要的。",
+            },
+            {
+                "q": "ragas 同时适配 Langfuse / MLflow / LangSmith / Helicone / Opik 多家观测平台，为什么不锁定一家？",
+                "opts": [
+                    "因为每家平台只能上报一种指标",
+                    "因为只有这样评测才能并发执行",
+                    "团队各有既用的观测栈，多家适配让 ragas 融入现有工具链，而非逼人迁移",
+                    "因为这些平台在技术上完全相同",
+                ],
+                "answer": 2,
+                "why": "观测平台往往是团队既成事实；ragas 提供多家「插头」（如 <code>helicone_config</code> 在评测里启用 Helicone），谁用哪家接哪家，缺某家依赖也只影响那一路——融入生态而非强加平台。",
+            },
+        ],
+    },
+    "36-source-debug-contribute.html": {
+        "mcq": [
+            {
+                "q": "ragas 的测试为什么大量用 <code>fake_llm</code> / <code>fake_embedding</code> fixture，而不真的调用 LLM？",
+                "opts": [
+                    "因为真实 LLM 在测试里无法被 import",
+                    "因为 <code>fake_llm</code> 打分比真 LLM 更准",
+                    "因为这样才能测出底层 LLM 的真实质量",
+                    "让指标测试确定、可复现且零成本——不受网络 / 计费 / 随机性影响，CI 才能稳定红绿",
+                ],
+                "answer": 3,
+                "why": "真调 LLM 又慢、又花钱、又有随机性，测试会时红时绿。fake fixtures 给出可控的确定输出，把「指标逻辑对不对」稳稳验证下来，CI 不被外部因素干扰。",
+            },
+            {
+                "q": "项目把 <code>make format</code> / <code>type</code> / <code>test</code> / <code>run-ci</code> 一键化，意图是什么？",
+                "opts": [
+                    "为了让常用命令更难记住",
+                    "统一开发动作、降低贡献门槛，本地与 CI 跑同一套流程，减少「我这能过、你那挂」",
+                    "因为 <code>uv</code> 没法直接跑 <code>pytest</code>",
+                    "因为只有 Makefile 才能安装依赖",
+                ],
+                "answer": 1,
+                "why": "把格式化 / 类型 / 测试 / CI 收敛成几个 make 目标（环境用 <code>uv</code> 管，<code>make install-minimal</code> 起步），新人照着跑即可；本地与 CI 同一入口，最大限度避免「在我机器上是好的」。",
+            },
+        ],
+    },
+    "37-cli.html": {
+        "mcq": [
+            {
+                "q": "你 <code>pip install</code> ragas 后就能直接敲 <code>ragas</code> 命令，这是怎么做到的？",
+                "opts": [
+                    "因为安装时 ragas 改写了你的 shell 配置文件",
+                    "因为 <code>typer</code> 会自动扫描 <code>PATH</code> 找命令",
+                    "pyproject 的 <code>[project.scripts]</code> 把 <code>ragas</code> 指向 <code>ragas.cli:app</code>，安装时自动生成可执行入口",
+                    "因为必须手动 export 一个别名才行",
+                ],
+                "answer": 2,
+                "why": "<code>[project.scripts]</code> 里 <code>ragas='ragas.cli:app'</code> 是标准的控制台脚本声明，pip / uv 据此生成 <code>ragas</code> 可执行文件——Python 打包体系提供的入口机制，无需用户手动配置。",
+            },
+            {
+                "q": "CLI 选用 <code>typer</code> + <code>rich</code> 这套组合，主要图什么？",
+                "opts": [
+                    "图它们能让命令行无法显示颜色",
+                    "<code>typer</code> 靠类型注解声明命令 / 参数省样板，<code>rich</code> 把评测结果渲染成好读的表格——好写又好看",
+                    "图它们可以替代 LLM 来打分",
+                    "因为 <code>sdk.py</code> 必须靠它们才能运行",
+                ],
+                "answer": 1,
+                "why": "<code>typer</code> 让定义 <code>quickstart</code> / <code>evals</code> / <code>hello_world</code> 几乎只靠函数签名，<code>rich</code> 把 <code>evals</code> 的分数渲染成清爽表格；一个管「好写」、一个管「好读」。（顺带：<code>sdk.py</code> 目前只是空占位，不影响 CLI。）",
+            },
+        ],
+    },
+    "38-capstone.html": {
+        "mcq": [
+            {
+                "q": "把新版 <code>collections</code> 指标直接传给经典的 <code>evaluate()</code> 会怎样？为什么这么设计？",
+                "opts": [
+                    "正常运行，两代指标本就可以随意混用",
+                    "会自动把它降级成旧版指标再跑",
+                    "会静默跳过该指标、继续评测其余项",
+                    "会抛 <code>TypeError</code>——<code>evaluate()</code> 只收旧版 <code>ragas.metrics</code> 指标，<code>collections</code> 指标应走 <code>@experiment</code> 直接 <code>ascore</code>",
+                ],
+                "answer": 3,
+                "why": "两代指标各配入口：<code>collections</code> 指标在 <code>@experiment</code> 里直接 <code>ascore</code>，<code>evaluate()</code> 只认旧版 <code>ragas.metrics</code> 指标；混用因类型不匹配抛 <code>TypeError</code>。「指标配对的入口」是端到端不踩坑的关键。",
+            },
+            {
+                "q": "capstone 的链路 <code>TestsetGenerator</code> → <code>to_evaluation_dataset</code> → 选指标 → <code>@experiment</code>，体现了全书怎样的主线？",
+                "opts": [
+                    "测试生成与评测是两条永不相交的平行线",
+                    "造题线产出经 <code>to_evaluation_dataset</code> 接回评测线，再用实验跑分对比迭代，两大支柱在此合龙闭环",
+                    "只有纯手工写的数据集才能拿去评测",
+                    "<code>@experiment</code> 其实只用于生成测试集",
+                ],
+                "answer": 1,
+                "why": "<code>to_evaluation_dataset</code> 是「测试生成线」与「评测线」的接口：造好题→转评测集→选 <code>collections</code> 指标→<code>@experiment</code> 跑并对比，正是全书「改→跑→比」闭环的完整落地。",
+            },
+        ],
+        "open": [
+            "为你自己的一个 LLM 应用规划一条 capstone 流水线：从 <code>TestsetGenerator</code> 造题到 <code>@experiment</code> 对比迭代，逐步列出每步用什么，并特别说明你会怎样避免把 <code>collections</code> 指标误传给 <code>evaluate()</code> 这类「入口配错」的坑。",
+        ],
+    },
 }
 
 

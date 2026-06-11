@@ -397,7 +397,41 @@ v1 = <span class="kw">await</span> run_eval.arun(golden, name=<span class="st">"
     <li>🎓 <strong>全书结业</strong>——从"我觉得还行"到"数据说它从 0.72 涨到 0.81"，你已握住 ragas 的全套手艺。去给你的 RAG 跑第一条真实的评测流水线吧！</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. 把新版 <code>collections</code> 指标直接传给经典的 <code>evaluate()</code> 会怎样？为什么这么设计？</div>
+  <ol class="opts">
+    <li>会静默跳过该指标、继续评测其余项</li>
+    <li>会自动把它降级成旧版指标再跑</li>
+    <li>正常运行，两代指标本就可以随意混用</li>
+    <li>会抛 <code>TypeError</code>——<code>evaluate()</code> 只收旧版 <code>ragas.metrics</code> 指标，<code>collections</code> 指标应走 <code>@experiment</code> 直接 <code>ascore</code></li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。两代指标各配入口：<code>collections</code> 指标在 <code>@experiment</code> 里直接 <code>ascore</code>，<code>evaluate()</code> 只认旧版 <code>ragas.metrics</code> 指标；混用因类型不匹配抛 <code>TypeError</code>。「指标配对的入口」是端到端不踩坑的关键。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. capstone 的链路 <code>TestsetGenerator</code> → <code>to_evaluation_dataset</code> → 选指标 → <code>@experiment</code>，体现了全书怎样的主线？</div>
+  <ol class="opts">
+    <li>造题线产出经 <code>to_evaluation_dataset</code> 接回评测线，再用实验跑分对比迭代，两大支柱在此合龙闭环</li>
+    <li><code>@experiment</code> 其实只用于生成测试集</li>
+    <li>只有纯手工写的数据集才能拿去评测</li>
+    <li>测试生成与评测是两条永不相交的平行线</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。<code>to_evaluation_dataset</code> 是「测试生成线」与「评测线」的接口：造好题→转评测集→选 <code>collections</code> 指标→<code>@experiment</code> 跑并对比，正是全书「改→跑→比」闭环的完整落地。</div></div></div>
+  </details>
+</div>
+<div class="card spark">
+  <div class="tag">💭 发散思考（没有标准答案，动手或动脑想想）</div>
+  <ul>
+    <li>为你自己的一个 LLM 应用规划一条 capstone 流水线：从 <code>TestsetGenerator</code> 造题到 <code>@experiment</code> 对比迭代，逐步列出每步用什么，并特别说明你会怎样避免把 <code>collections</code> 指标误传给 <code>evaluate()</code> 这类「入口配错」的坑。</li>
+  </ul>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="37-cli.html"><div class="dir">← 上一课</div><div class="ttl">CLI</div></a><a class="next" href="39-glossary.html"><div class="dir">下一课 →</div><div class="ttl">术语表 · 概念索引</div></a></div>
 </div>
 

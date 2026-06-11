@@ -361,7 +361,35 @@ print(result[<span class="st">"correlation"</span>], result[<span class="st">"ag
     <li>新栈 <span class="inline">SimpleLLMMetric.align_and_validate</span> 一步搞定切分→对齐→验证，用<strong>相关性 / 一致率</strong>报告效果。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. <code>MetricWithLLM.train</code> 为什么要从人工标注（<code>MetricAnnotation</code>）里学，而不是凭空优化？</div>
+  <ol class="opts">
+    <li>因为标注只是用来让训练更快收敛</li>
+    <li>因为有了标注就不必再调用 LLM</li>
+    <li>因为没有标注在技术上无法启动训练</li>
+    <li>以人类判断为「金标准」对齐：优化指令 + 挑 few-shot 示例，让 LLM 裁判与人类打分的相关性更高</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。<code>train</code> 拿人工标注当目标，去优化 prompt 指令、挑选 few-shot 示例，并用「与人类标注的相关性」衡量好坏——让 LLM 裁判一步步贴近人类判断，这才是优化指标的意义。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. <code>train</code> 为什么按指标的 <code>output_type</code> 自动挑损失函数（BINARY→<code>BinaryMetricLoss</code>，连续 / 离散→<code>MSELoss</code>）？</div>
+  <ol class="opts">
+    <li>因为这样能少装一个依赖</li>
+    <li>因为 <code>MSELoss</code> 根本不能用于任何指标</li>
+    <li>不同输出类型「错得有多离谱」的度量方式不同，选对 loss 才能给优化器正确的方向</li>
+    <li>因为损失函数随便选结果都一样</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：C</strong>。二分类的对 / 错与连续值的偏差，本质是两种误差度量；按 <code>output_type</code> 自动选 loss，<code>GeneticOptimizer</code>（默认）/ <code>DSPyOptimizer</code> 才能拿到合理的适应度信号，把指标往「更像人」推。</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="32-backends.html"><div class="dir">← 上一课</div><div class="ttl">Backends 可插拔</div></a><a class="next" href="34-integrations-frameworks.html"><div class="dir">下一课 →</div><div class="ttl">集成①：框架</div></a></div>
 </div>
 

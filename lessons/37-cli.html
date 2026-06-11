@@ -353,7 +353,35 @@ ragas evals my_eval.py --dataset qa --metrics correctness --baseline v1</pre>
     <li><span class="mono">sdk.py</span> 目前为<strong>空占位</strong>；CLI 能力全在 <span class="mono">cli.py</span>。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. 你 <code>pip install</code> ragas 后就能直接敲 <code>ragas</code> 命令，这是怎么做到的？</div>
+  <ol class="opts">
+    <li>因为 <code>typer</code> 会自动扫描 <code>PATH</code> 找命令</li>
+    <li>pyproject 的 <code>[project.scripts]</code> 把 <code>ragas</code> 指向 <code>ragas.cli:app</code>，安装时自动生成可执行入口</li>
+    <li>因为必须手动 export 一个别名才行</li>
+    <li>因为安装时 ragas 改写了你的 shell 配置文件</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。<code>[project.scripts]</code> 里 <code>ragas='ragas.cli:app'</code> 是标准的控制台脚本声明，pip / uv 据此生成 <code>ragas</code> 可执行文件——Python 打包体系提供的入口机制，无需用户手动配置。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. CLI 选用 <code>typer</code> + <code>rich</code> 这套组合，主要图什么？</div>
+  <ol class="opts">
+    <li>图它们能让命令行无法显示颜色</li>
+    <li>图它们可以替代 LLM 来打分</li>
+    <li>因为 <code>sdk.py</code> 必须靠它们才能运行</li>
+    <li><code>typer</code> 靠类型注解声明命令 / 参数省样板，<code>rich</code> 把评测结果渲染成好读的表格——好写又好看</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。<code>typer</code> 让定义 <code>quickstart</code> / <code>evals</code> / <code>hello_world</code> 几乎只靠函数签名，<code>rich</code> 把 <code>evals</code> 的分数渲染成清爽表格；一个管「好写」、一个管「好读」。（顺带：<code>sdk.py</code> 目前只是空占位，不影响 CLI。）</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="36-source-debug-contribute.html"><div class="dir">← 上一课</div><div class="ttl">读源码 · 调试 · 测试 · 贡献</div></a><a class="next" href="38-capstone.html"><div class="dir">下一课 →</div><div class="ttl">端到端实战</div></a></div>
 </div>
 

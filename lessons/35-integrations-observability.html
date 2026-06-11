@@ -357,7 +357,35 @@ MLflow 侧的 <span class="inline">sync_trace</span> 改走 <span class="mono">g
     <li>观测能力都是<strong>可选依赖、惰性加载</strong>，缺库不炸整包。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. 把评测过程上报到 Langfuse / MLflow / LangSmith 这类观测平台，主要解决什么问题？</div>
+  <ol class="opts">
+    <li>让评测从此不再需要数据集</li>
+    <li>让指标分数自动变高</li>
+    <li>让评测彻底离线、不留任何记录</li>
+    <li>让每次评测的每一步可视化、可回溯，便于在生产级大盘上定位薄弱环节</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。<code>observe</code> 把评测的调用链与分数上报到专业大盘，评测从「黑盒跑完给个数」变成「每步可视、可回溯」——这正是生产环境排查与监控所需要的。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. ragas 同时适配 Langfuse / MLflow / LangSmith / Helicone / Opik 多家观测平台，为什么不锁定一家？</div>
+  <ol class="opts">
+    <li>因为每家平台只能上报一种指标</li>
+    <li>因为这些平台在技术上完全相同</li>
+    <li>团队各有既用的观测栈，多家适配让 ragas 融入现有工具链，而非逼人迁移</li>
+    <li>因为只有这样评测才能并发执行</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：C</strong>。观测平台往往是团队既成事实；ragas 提供多家「插头」（如 <code>helicone_config</code> 在评测里启用 Helicone），谁用哪家接哪家，缺某家依赖也只影响那一路——融入生态而非强加平台。</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="34-integrations-frameworks.html"><div class="dir">← 上一课</div><div class="ttl">集成①：框架</div></a><a class="next" href="36-source-debug-contribute.html"><div class="dir">下一课 →</div><div class="ttl">读源码 · 调试 · 测试 · 贡献</div></a></div>
 </div>
 

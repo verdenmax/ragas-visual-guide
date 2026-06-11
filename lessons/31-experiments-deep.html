@@ -370,7 +370,41 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <li><span class="inline">version_experiment</span> 用 git 把实验钉在代码快照上（分支 <span class="mono">ragas/{name}</span>），结果与代码两边对齐。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. <code>@experiment</code> 的 <code>arun</code> 为什么用 <code>asyncio.as_completed</code> 并发跑每一行，而不是顺序逐行评测？</div>
+  <ol class="opts">
+    <li>因为顺序执行会导致结果无法 <code>save</code> 落盘</li>
+    <li>每行评测都是独立的 IO 密集调用（等 LLM / 检索），并发能榨干等待时间、谁先完成先收谁</li>
+    <li>因为 <code>asyncio</code> 是唯一能写文件的方式</li>
+    <li>因为 <code>as_completed</code> 能让评测过程不调用 LLM</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。<code>arun</code> 把每行的「调你的 RAG + 打分」包成协程，用 <code>asyncio.as_completed</code> 并发——这些任务大多在等 LLM / 检索返回，属 IO 密集，并发把等待时间利用起来；顺序跑只会白白空等。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. <code>version_experiment</code> 为什么要用 git 给每次实验单独建一个 <code>ragas/{name}</code> 分支？</div>
+  <ol class="opts">
+    <li>给「这版代码跑出这版结果」拍不可变快照，可回溯、可对比，把「改→跑→比」闭成环</li>
+    <li>因为不建分支就解析不出 backend</li>
+    <li>因为 git 是 ragas 唯一的存储后端</li>
+    <li>因为建分支能让实验跑得更快</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。把每次实验版本化成 <code>ragas/{name}</code> 分支，等于给代码与结果拍快照；日后随时切回任一版做对比，评测因此成为可复现、可迭代的闭环——这正是 experiments-first 的落点。</div></div></div>
+  </details>
+</div>
+<div class="card spark">
+  <div class="tag">💭 发散思考（没有标准答案，动手或动脑想想）</div>
+  <ul>
+    <li>你给同一个 RAG 先后跑了 v1 / v2 两次 <code>@experiment</code>，分数互有高低。借助 <code>version_experiment</code> 的 git 分支，你会怎样组织这两次实验，才能既快速并排对比分数、又能随时切回任一版的代码与数据？</li>
+  </ul>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="30-testset-generator.html"><div class="dir">← 上一课</div><div class="ttl">TestsetGenerator 端到端</div></a><a class="next" href="32-backends.html"><div class="dir">下一课 →</div><div class="ttl">Backends 可插拔</div></a></div>
 </div>
 

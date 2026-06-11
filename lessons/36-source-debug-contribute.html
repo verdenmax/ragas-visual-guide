@@ -361,7 +361,35 @@ make run-ci                 <span class="cm"># 提 PR 前本地复刻一遍 CI</
     <li>一切走 <strong>uv + Makefile</strong>：环境、依赖、CI 全统一，照 <span class="mono">CONTRIBUTING.md</span> 走即可。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. ragas 的测试为什么大量用 <code>fake_llm</code> / <code>fake_embedding</code> fixture，而不真的调用 LLM？</div>
+  <ol class="opts">
+    <li>因为这样才能测出底层 LLM 的真实质量</li>
+    <li>让指标测试确定、可复现且零成本——不受网络 / 计费 / 随机性影响，CI 才能稳定红绿</li>
+    <li>因为真实 LLM 在测试里无法被 import</li>
+    <li>因为 <code>fake_llm</code> 打分比真 LLM 更准</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。真调 LLM 又慢、又花钱、又有随机性，测试会时红时绿。fake fixtures 给出可控的确定输出，把「指标逻辑对不对」稳稳验证下来，CI 不被外部因素干扰。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. 项目把 <code>make format</code> / <code>type</code> / <code>test</code> / <code>run-ci</code> 一键化，意图是什么？</div>
+  <ol class="opts">
+    <li>因为 <code>uv</code> 没法直接跑 <code>pytest</code></li>
+    <li>为了让常用命令更难记住</li>
+    <li>统一开发动作、降低贡献门槛，本地与 CI 跑同一套流程，减少「我这能过、你那挂」</li>
+    <li>因为只有 Makefile 才能安装依赖</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：C</strong>。把格式化 / 类型 / 测试 / CI 收敛成几个 make 目标（环境用 <code>uv</code> 管，<code>make install-minimal</code> 起步），新人照着跑即可；本地与 CI 同一入口，最大限度避免「在我机器上是好的」。</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="35-integrations-observability.html"><div class="dir">← 上一课</div><div class="ttl">集成②：观测</div></a><a class="next" href="37-cli.html"><div class="dir">下一课 →</div><div class="ttl">CLI</div></a></div>
 </div>
 

@@ -350,7 +350,41 @@ testset = generator.generate_with_langchain_docs(docs, testset_size=10)   <span 
     <li>靠<strong>惰性导入</strong>容忍可选依赖：<span class="mono">__init__.py</span> 不 eager import，用哪个插头才导哪个，缺依赖不影响整包。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. 各框架集成为什么把它依赖的第三方库 import 下沉到各自子模块，而不在 <code>integrations</code> 包顶层统一导入？</div>
+  <ol class="opts">
+    <li>因为 Python 顶层模块里不允许写 import</li>
+    <li>因为这样能让所有集成都跑得更快</li>
+    <li>因为各框架依赖之间一定会互相覆盖</li>
+    <li>「按插头分装」：缺某框架的依赖只断那一路集成，不会让整个 <code>integrations</code> 包 import 失败</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。把 import 下沉到子模块，每个集成各管各的依赖——没装 <code>llama_index</code> 不影响你用 <code>langchain</code> 集成。可选能力按需加载，缺哪个插头只断哪一路，这与 backend 的可选导入一脉相承。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. <code>TestsetGenerator.from_langchain</code> / <code>from_llama_index</code> 这类入口体现了什么设计意图？</div>
+  <ol class="opts">
+    <li>强迫用户放弃原框架、把数据全部重写一遍</li>
+    <li>因为不提供入口就根本无法生成测试集</li>
+    <li>因为 ragas 只能读这两个框架的数据</li>
+    <li>接住各框架的文档 / 对象，转成 ragas 能用的输入，让你在原有生态里平滑接入测试生成</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。<code>from_langchain</code> / <code>from_llama_index</code> 把别家的文档对象「翻译」成 ragas 的输入——你不必离开熟悉的框架，集成层替你做适配，接入成本因此很低。</div></div></div>
+  </details>
+</div>
+<div class="card spark">
+  <div class="tag">💭 发散思考（没有标准答案，动手或动脑想想）</div>
+  <ul>
+    <li>你的应用基于 LlamaIndex，同事的服务却用 LangGraph。结合 ragas 各集成「依赖各自下沉、互不拖累」的设计，你会怎样在一个仓库里同时评测这两套，又尽量避免依赖互相打架？</li>
+  </ul>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="33-optimization-training.html"><div class="dir">← 上一课</div><div class="ttl">指标优化与训练</div></a><a class="next" href="35-integrations-observability.html"><div class="dir">下一课 →</div><div class="ttl">集成②：观测</div></a></div>
 </div>
 
