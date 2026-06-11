@@ -235,8 +235,8 @@ metric.train(
 <p>两份配置<strong>各管一摊、都可选</strong>：传谁就优化谁。背后对应两个内部步骤：</p>
 <table class="t">
   <tr><th>配置</th><th>优化什么</th><th>怎么做</th></tr>
-  <tr><td class="mono">InstructionConfig</td><td>prompt 的<strong>指令</strong>措辞</td><td><span class="inline">_optimize_instruction</span>：跑优化器搜出更好的指令，替换每个 prompt 的 <span class="mono">instruction</span></td></tr>
-  <tr><td class="mono">DemonstrationConfig</td><td>prompt 的 <strong>few-shot 示例</strong></td><td><span class="inline">_optimize_demonstration</span>：把标注转成示例，建 <span class="inline">FewShotPydanticPrompt</span>，按 embedding 相似度挑 <span class="mono">top_k</span> 个（<a href="20-prompt-advanced.html">第 20 课</a>）</td></tr>
+  <tr><td class="mono">InstructionConfig</td><td>prompt 的<strong>指令</strong>措辞</td><td><span class="mono">_optimize_instruction</span>：跑优化器搜出更好的指令，替换每个 prompt 的 <span class="mono">instruction</span></td></tr>
+  <tr><td class="mono">DemonstrationConfig</td><td>prompt 的 <strong>few-shot 示例</strong></td><td><span class="mono">_optimize_demonstration</span>：把标注转成示例，建 <span class="mono">FewShotPydanticPrompt</span>，按 embedding 相似度挑 <span class="mono">top_k</span> 个（<a href="20-prompt-advanced.html">第 20 课</a>）</td></tr>
 </table>
 <p>训练数据由 <span class="inline">MetricAnnotation.from_json(path, metric_name=self.name)</span> 加载：JSON 以<strong>指标名</strong>为键，每条是"输入 + 人工给的标签/分数"。<span class="inline">DemonstrationConfig</span> 默认 <span class="mono">top_k=3</span>、<span class="mono">threshold=0.7</span>、<span class="mono">technique="similarity"</span>。</p>
 
