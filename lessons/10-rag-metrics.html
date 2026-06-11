@@ -267,9 +267,104 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>RAG 四件套用法</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+RAG 应用要同时管好<strong>检索</strong>和<strong>生成</strong>两端。ragas 的 <strong>RAG 四件套</strong>——Faithfulness、ContextPrecision、ContextRecall、AnswerRelevancy——正好各盯一段。
+本课讲清每个指标<strong>量什么、需要哪些字段</strong>，并给出现代 collections 的最小组合用法。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  RAG 像一场<strong>开卷考试</strong>：考生（LLM）答题前先翻资料（检索）。四件套分别问四个问题——
+  <strong>答案有没有照着资料写</strong>（Faithfulness）、<strong>翻到的资料相不相关</strong>（ContextPrecision）、
+  <strong>该翻的资料翻全了没</strong>（ContextRecall）、<strong>有没有答到点子上</strong>（AnswerRelevancy）。
+</div>
+
+<h2>四件套：各盯一段</h2>
+<p>每个指标只挑自己要的字段（回顾样本字段见 <a href="04-single-turn-sample.html">第 4 课</a>）。注意 <span class="inline">ascore</span> 的<strong>必需字段</strong>各不相同：</p>
+
+<table class="t">
+  <tr><th>指标</th><th>量什么</th><th><span class="mono">ascore</span> 必需字段</th></tr>
+  <tr><td class="mono">Faithfulness</td><td>生成端：答案是否全部有检索资料支撑（查幻觉）</td><td class="mono">user_input + response + retrieved_contexts</td></tr>
+  <tr><td class="mono">ContextPrecision</td><td>检索端：相关资料是否排在前面（平均精度）</td><td class="mono">user_input + reference + retrieved_contexts</td></tr>
+  <tr><td class="mono">ContextRecall</td><td>检索端：reference 的内容是否都被检索覆盖</td><td class="mono">user_input + retrieved_contexts + reference</td></tr>
+  <tr><td class="mono">AnswerRelevancy</td><td>生成端：回答是否切题（反推问题再比相似度）</td><td class="mono">user_input + response（构造时另需 embeddings）</td></tr>
+</table>
+
+<p><span class="inline">ContextPrecision</span> 默认等于 <span class="inline">ContextPrecisionWithReference</span>（拿 <span class="inline">reference</span> 比对）；没有标准答案时改用 <span class="inline">ContextPrecisionWithoutReference</span>（别名 <span class="inline">ContextUtilization</span>，改拿 <span class="inline">response</span> 比对）。
+<span class="inline">AnswerRelevancy</span> 要把"从回答反推出来的问题"与原问题算<strong>余弦相似度</strong>，所以构造时必须给 <span class="inline">embeddings</span>。</p>
+
+<h2>最小组合示例</h2>
+<pre class="code"><span class="kw">from</span> ragas.metrics.collections <span class="kw">import</span> (
+    Faithfulness, ContextPrecision, ContextRecall, AnswerRelevancy,
+)
+<span class="kw">from</span> ragas.llms <span class="kw">import</span> llm_factory
+<span class="kw">from</span> ragas.embeddings.base <span class="kw">import</span> embedding_factory
+<span class="kw">from</span> openai <span class="kw">import</span> AsyncOpenAI
+
+client = AsyncOpenAI()                       <span class="cm"># 需要 OPENAI_API_KEY</span>
+llm = llm_factory(<span class="st">"gpt-4o-mini"</span>, client=client)
+emb = embedding_factory(<span class="st">"openai"</span>, model=<span class="st">"text-embedding-3-small"</span>, client=client)
+
+q   = <span class="st">"谁写了《哈姆雷特》？"</span>
+ctx = [<span class="st">"《哈姆雷特》是莎士比亚的剧作。"</span>]
+ans = <span class="st">"莎士比亚。"</span>
+ref = <span class="st">"威廉·莎士比亚"</span>
+
+faith = Faithfulness(llm=llm)                <span class="cm"># 只需 llm</span>
+cprec = ContextPrecision(llm=llm)            <span class="cm"># = ContextPrecisionWithReference</span>
+crec  = ContextRecall(llm=llm)
+arel  = AnswerRelevancy(llm=llm, embeddings=emb)   <span class="cm"># 另需 embeddings</span>
+
+r_faith = <span class="kw">await</span> faith.ascore(user_input=q, response=ans, retrieved_contexts=ctx)
+r_prec  = <span class="kw">await</span> cprec.ascore(user_input=q, reference=ref, retrieved_contexts=ctx)
+r_rec   = <span class="kw">await</span> crec.ascore(user_input=q, retrieved_contexts=ctx, reference=ref)
+r_rel   = <span class="kw">await</span> arel.ascore(user_input=q, response=ans)
+print(r_faith.value, r_prec.value, r_rec.value, r_rel.value)  <span class="cm"># 四个 0~1 分数</span></pre>
+
+<p>四个指标都返回 <span class="inline">MetricResult</span>，取 <span class="inline">.value</span> 拿分数（<a href="14-metric-result.html">第 14 课</a>）。
+注意 embedding 工厂从 <span class="mono">ragas.embeddings.base</span> 导入——从 <span class="mono">ragas.embeddings</span> 导 <span class="inline">embedding_factory</span> 已被标记废弃。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 字段不齐会怎样？和 evaluate() 默认指标的关系 <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 缺字段立即报错</div>
+      <div class="a">每个 <span class="inline">ascore</span> 开头都会校验必需字段，缺了就直接抛 <span class="mono">ValueError</span>（如 <span class="mono">"retrieved_contexts is missing…"</span>）。所以传错字段会<strong>当场暴露</strong>，而不是默默给个错分。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 正是 evaluate() 的默认四件套</div>
+      <div class="a"><span class="inline">evaluate()</span> 不传 <span class="inline">metrics</span> 时，默认就是这四个（<a href="07-evaluate.html">第 7 课</a>）——只不过用的是 <strong>legacy 单例</strong>（<span class="mono">answer_relevancy</span> / <span class="mono">context_precision</span> / <span class="mono">faithfulness</span> / <span class="mono">context_recall</span>，定义在 <span class="mono">_answer_relevance.py</span> 等）。本课教的是同一算法的现代 collections 版，推荐自己组合。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  四件套现代实现各在 <span class="mono">src/ragas/metrics/collections/</span> 下的 <span class="mono">&lt;name&gt;/metric.py</span>：
+  <span class="mono">faithfulness/metric.py</span>（<span class="mono">Faithfulness.ascore(user_input, response, retrieved_contexts)</span>，先把回答拆成原子陈述、再逐条 NLI 核对，分数 = 被支撑陈述占比）；
+  <span class="mono">context_precision/metric.py</span>（<span class="mono">ContextPrecision</span> 即 <span class="mono">ContextPrecisionWithReference</span>，算 average precision）；
+  <span class="mono">context_recall/metric.py</span>（<span class="mono">ContextRecall.ascore(user_input, retrieved_contexts, reference)</span>）；
+  <span class="mono">answer_relevancy/metric.py</span>（构造需 <span class="mono">llm</span> + <span class="mono">embeddings</span>，<span class="mono">strictness</span> 默认 3）。
+  它们都继承 <span class="mono">collections/base.py</span> 的 <span class="mono">BaseMetric</span>，只接受现代 <span class="mono">InstructorBaseRagasLLM</span>（<span class="mono">llm_factory</span> 产物，否则报错）。<span class="mono">evaluate()</span> 的默认四件套见 <span class="mono">evaluation.py</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>两端覆盖</strong>：ContextPrecision / Recall 管"检索质量"，Faithfulness / AnswerRelevancy 管"生成质量"，合起来给 RAG 做体检。</li>
+    <li><strong>接口统一</strong>：都是 <span class="inline">await metric.ascore(**kwargs)</span> → <span class="inline">MetricResult</span>，按需取 <span class="inline">.value</span> / <span class="inline">.reason</span>。</li>
+    <li><strong>缺字段立即报错</strong>：每个 <span class="inline">ascore</span> 开头校验必需字段，为空就抛 <span class="mono">ValueError</span>，问题早暴露。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>四件套各管一段：Faithfulness（无幻觉）· ContextPrecision（相关靠前）· ContextRecall（召回全）· AnswerRelevancy（切题）。</li>
+    <li>记住<strong>必需字段</strong>差异：Faithfulness 要 <span class="mono">retrieved_contexts</span>，ContextRecall 还要 <span class="mono">reference</span>，AnswerRelevancy 另需 <span class="mono">embeddings</span>。</li>
+    <li>现代用法：<span class="mono">from ragas.metrics.collections import …</span> → 构造注入 <span class="mono">llm</span> / <span class="mono">embeddings</span> → <span class="mono">await ascore(...)</span>；<span class="mono">evaluate()</span> 不传 metrics 时默认就是这四个（legacy 版）。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="09-metrics-overview.html"><div class="dir">← 上一课</div><div class="ttl">内置指标全景</div></a><a class="next" href="11-custom-metrics.html"><div class="dir">下一课 →</div><div class="ttl">自定义指标（Simple 栈）</div></a></div>
 </div>

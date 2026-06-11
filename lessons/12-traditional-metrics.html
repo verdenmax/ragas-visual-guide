@@ -267,9 +267,100 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>传统 / 非 LLM 指标</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+不是每个指标都要请 LLM 当裁判。<strong>传统 / 非 LLM 指标</strong>用确定性算法直接"量"——便宜、可复现、零 token，
+放进 CI 里反复跑也不心疼。本课讲清它们各量什么、何时该用，以及检索指标的非 LLM 版本。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  LLM 类指标像请<strong>考官</strong>主观评判；传统指标像拿<strong>尺子</strong>量——尺子量出来的数永远一致、不要钱、瞬间出结果。
+  能用尺子说清的，就别为它单独请一位考官。
+</div>
+
+<h2>何时用传统指标</h2>
+<ul>
+  <li>有<strong>标准答案</strong>可逐字 / 逐词比对时；</li>
+  <li>要<strong>可复现</strong>——跨次、跨人结果一致时；</li>
+  <li>要<strong>省成本</strong>——零 token、无 API、毫秒级，特别适合放进 CI 回归。</li>
+</ul>
+<p>代价是它们<strong>不懂语义</strong>：换种说法但意思相同，分数也可能偏低。所以传统指标常和 LLM 指标<strong>混用</strong>。</p>
+
+<h2>一句话清单</h2>
+<table class="t">
+  <tr><th>指标</th><th>量什么</th><th>依赖</th><th>必需字段</th></tr>
+  <tr><td class="mono">BleuScore</td><td>n-gram 重叠（机器翻译 / 生成）</td><td class="mono">sacrebleu</td><td class="mono">reference + response</td></tr>
+  <tr><td class="mono">RougeScore</td><td>n-gram / 最长公共子序列重叠（摘要）</td><td class="mono">rouge_score</td><td class="mono">reference + response</td></tr>
+  <tr><td class="mono">CHRFScore</td><td>字符级 n-gram F 值（形态丰富的语言更稳）</td><td class="mono">sacrebleu</td><td class="mono">reference + response</td></tr>
+  <tr><td class="mono">ExactMatch</td><td>是否完全相等（1.0 / 0.0）</td><td class="mono">—</td><td class="mono">reference + response</td></tr>
+  <tr><td class="mono">StringPresence</td><td>reference 是否作为子串出现在 response 中</td><td class="mono">—</td><td class="mono">reference + response</td></tr>
+  <tr><td class="mono">NonLLMStringSimilarity</td><td>编辑距离相似度（Levenshtein / Hamming / Jaro / JaroWinkler）</td><td class="mono">rapidfuzz</td><td class="mono">reference + response</td></tr>
+  <tr><td class="mono">DataCompyScore</td><td>两份 CSV 的行 / 列比对（precision / recall / f1）</td><td class="mono">datacompy + pandas</td><td class="mono">reference + response</td></tr>
+</table>
+
+<p>这些现代版都在 <span class="inline">ragas.metrics.collections</span>：构造即用、<span class="inline">await ascore(reference=..., response=...)</span>，<strong>无需 llm / embeddings</strong>。
+注意类名在 collections 里是 <span class="mono">CHRFScore</span>（legacy 旧名 <span class="mono">ChrfScore</span>）。</p>
+
+<pre class="code"><span class="kw">from</span> ragas.metrics.collections <span class="kw">import</span> BleuScore, ExactMatch, RougeScore
+
+bleu  = BleuScore()
+em    = ExactMatch()
+rouge = RougeScore(rouge_type=<span class="st">"rougeL"</span>, mode=<span class="st">"fmeasure"</span>)
+
+<span class="cm"># 传统指标无需 llm / embeddings，零 token、毫秒级</span>
+r1 = <span class="kw">await</span> bleu.ascore(reference=<span class="st">"巴黎是法国的首都。"</span>, response=<span class="st">"法国的首都是巴黎。"</span>)
+r2 = <span class="kw">await</span> em.ascore(reference=<span class="st">"Paris"</span>, response=<span class="st">"Paris"</span>)
+print(r1.value, r2.value)  <span class="cm"># 0.xx  1.0</span></pre>
+
+<h2>非 LLM 的检索指标（暂只在 legacy）</h2>
+<p>检索质量也有不花钱的算法版，但<strong>目前只在 <span class="inline">ragas.metrics</span></strong>（collections 暂未提供）：</p>
+
+<table class="t">
+  <tr><th>指标</th><th>怎么算</th><th>必需字段</th></tr>
+  <tr><td class="mono">NonLLMContextPrecisionWithReference<br>NonLLMContextRecall</td><td>用<strong>字符串距离</strong>（默认 Levenshtein）+ 阈值 0.5，比对 retrieved_contexts 与 reference_contexts</td><td class="mono">retrieved_contexts + reference_contexts</td></tr>
+  <tr><td class="mono">IDBasedContextPrecision<br>IDBasedContextRecall</td><td>直接按 <strong>ID</strong> 比对（支持 str / int），看检索到的 ID 与参考 ID 的交集</td><td class="mono">retrieved_context_ids + reference_context_ids</td></tr>
+</table>
+
+<p>它们是 <a href="16-context-metrics-internals.html">第 16 课</a> LLM 版 ContextPrecision / Recall 的"省钱版"——同一概念、确定性算法实现。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> LLM 版 vs 非 LLM 版，怎么选？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 同一概念常有两个版本</div>
+      <div class="a">很多概念都有"考官版"和"尺子版"：SQL 等价判断有 <span class="inline">SQLSemanticEquivalence</span>（<strong>LLM</strong> 判语义等价，构造需 <span class="inline">llm</span>）和确定性的 <span class="inline">DataCompyScore</span>（直接比表格数据）；检索精度有 LLM 版 <span class="inline">ContextPrecision</span> 与非 LLM 版 <span class="inline">NonLLMContextPrecisionWithReference</span>。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 取舍原则</div>
+      <div class="a">要"懂语义、容忍换种说法"→ 花钱请 LLM；要"快、稳、可复现、能进 CI"→ 用传统指标。实战常<strong>两者混用</strong>：先用传统指标快速回归初筛，再用 LLM 指标抓语义问题。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  传统指标的现代实现集中在 <span class="mono">src/ragas/metrics/collections/</span>：<span class="mono">_bleu_score.py</span>（<span class="mono">BleuScore</span>，sacrebleu）、<span class="mono">_rouge_score.py</span>（<span class="mono">RougeScore</span>，rouge_score）、<span class="mono">chrf_score/metric.py</span>（<span class="mono">CHRFScore</span>，sacrebleu）、<span class="mono">_string.py</span>（<span class="mono">ExactMatch</span> / <span class="mono">StringPresence</span> / <span class="mono">NonLLMStringSimilarity</span> + <span class="mono">DistanceMeasure</span> 枚举）、<span class="mono">datacompy_score/metric.py</span>（<span class="mono">DataCompyScore</span>，datacompy + pandas）；它们的 <span class="mono">ascore(reference, response)</span> 不碰 llm。
+  对照之下，<span class="mono">sql_semantic_equivalence/metric.py</span> 的 <span class="mono">SQLSemanticEquivalence</span> <strong>需要</strong> llm（判语义）。非 LLM / ID 版检索指标在 legacy 的 <span class="mono">_context_precision.py</span> / <span class="mono">_context_recall.py</span>（<span class="mono">NonLLMContext…</span> / <span class="mono">IDBasedContext…</span>，均 <span class="mono">SingleTurnMetric</span>）。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li>同一概念常<strong>LLM 版 + 非 LLM 版并存</strong>：在"懂语义"与"成本 / 可复现"之间按需取舍。</li>
+    <li>传统指标<strong>确定、零 token</strong>：同样输入永远同样输出，特别适合 CI 回归与大批量初筛。</li>
+    <li>现代传统指标<strong>构造即用</strong>：不定义 llm / embeddings 字段，<span class="inline">BaseMetric</span> 就跳过模型校验。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>能用尺子（确定性算法）说清的，就别请考官（LLM）：传统指标便宜、可复现、零 token。</li>
+    <li>现代版在 <span class="mono">ragas.metrics.collections</span>：<span class="mono">BleuScore</span> / <span class="mono">RougeScore</span> / <span class="mono">CHRFScore</span> / <span class="mono">ExactMatch</span> / <span class="mono">StringPresence</span> / <span class="mono">NonLLMStringSimilarity</span> / <span class="mono">DataCompyScore</span>，<span class="mono">ascore(reference, response)</span> 无需模型。</li>
+    <li>检索指标的非 LLM / ID 版<strong>暂只在 <span class="mono">ragas.metrics</span></strong>（legacy）。</li>
+    <li>实战<strong>混用</strong>最划算：传统指标快筛 + LLM 指标抓语义（对照 <a href="10-rag-metrics.html">第 10 课</a> / <a href="16-context-metrics-internals.html">第 16 课</a> 的 LLM 版）。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="11-custom-metrics.html"><div class="dir">← 上一课</div><div class="ttl">自定义指标（Simple 栈）</div></a><a class="next" href="13-metric-base.html"><div class="dir">下一课 →</div><div class="ttl">Metric 基类体系</div></a></div>
 </div>

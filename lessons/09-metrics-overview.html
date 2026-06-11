@@ -267,9 +267,108 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>内置指标全景</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+ragas 内置了几十个指标，但它们正处在<strong>两代并存</strong>的迁移期。本课先给你一张<strong>指标地图</strong>：
+讲清两代指标各自<strong>从哪里导入</strong>、谁已被废弃，再按 LLM 类 / 传统类 / Agent 类把常用指标排成一张可检索的总表。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  内置指标就像一份<strong>体检套餐目录</strong>：有"抽血化验"（LLM 当裁判、看语义），也有"量身高体重"（传统算法、确定性测量）。
+  你不必每项都做——<strong>按场景（RAG / Agent / 文本相似）挑选</strong>需要的几项，组合成自己的套餐即可。
+</div>
+
+<h2>两代指标：从哪里导入</h2>
+<p>ragas 的具名指标正在从老模块 <span class="inline">ragas.metrics</span> 搬到新模块 <span class="inline">ragas.metrics.collections</span>。记住一条规矩就够了：</p>
+<ul>
+  <li><strong>具名指标</strong>（Faithfulness、ContextPrecision、ToolCallAccuracy…）的"正门"是 <span class="mono">ragas.metrics.collections</span>。</li>
+  <li><strong>基类与 Simple 栈</strong>（<span class="mono">Metric</span> / <span class="mono">MetricWithLLM</span> / <span class="mono">DiscreteMetric</span> / <span class="mono">NumericMetric</span> / <span class="mono">RankingMetric</span> / <span class="mono">MetricResult</span> 等）仍留在 <span class="mono">ragas.metrics</span>，<strong>未废弃</strong>。</li>
+  <li>从 <span class="mono">ragas.metrics</span> 导入<strong>具名指标</strong>会触发 <span class="mono">DeprecationWarning</span>，并在 <strong>v1.0 移除</strong>。</li>
+</ul>
+
+<pre class="code"><span class="cm"># ✅ 具名指标：从 collections 导入（现代规范）</span>
+<span class="kw">from</span> ragas.metrics.collections <span class="kw">import</span> Faithfulness, ContextPrecision
+
+<span class="cm"># ✅ 基类与 Simple 栈：仍在 ragas.metrics（未废弃）</span>
+<span class="kw">from</span> ragas.metrics <span class="kw">import</span> DiscreteMetric, NumericMetric, MetricResult
+
+<span class="cm"># ⚠️ 旧写法：从 ragas.metrics 导入具名指标 → DeprecationWarning，v1.0 移除</span>
+<span class="kw">from</span> ragas.metrics <span class="kw">import</span> Faithfulness   <span class="cm"># 触发告警</span></pre>
+
+<h2>LLM 类 vs 传统类（外加：单轮 / 多轮）</h2>
+<p>按"要不要请裁判模型"分两大类，是挑指标时最实用的切法：</p>
+<ul>
+  <li><strong>LLM 类</strong>：拿一个 LLM 当裁判，从语义层面打分（如 Faithfulness）。现代 collections 版只接受<strong>现代 LLM</strong>（<span class="inline">llm_factory</span> 的产物），构造时注入。</li>
+  <li><strong>传统类</strong>：用确定性算法直接算（如 BLEU / ROUGE / 字符串距离），<strong>不需要模型</strong>、零 token（<a href="12-traditional-metrics.html">第 12 课</a>）。</li>
+</ul>
+<p>另有一条正交的分法——<strong>单轮 vs 多轮</strong>：由 <span class="inline">MetricType</span> 区分（<span class="mono">SINGLE_TURN</span> / <span class="mono">MULTI_TURN</span>）。Agent 类指标多是多轮的，吃一整段带工具调用的对话（<a href="18-agent-metrics-internals.html">第 18 课</a>）。</p>
+
+<h2>指标地图：常用内置指标总表</h2>
+<table class="t">
+  <tr><th>指标</th><th>类型</th><th>一句话用途</th><th>深入课程</th></tr>
+  <tr><td class="mono">Faithfulness</td><td>LLM 类</td><td>答案是否全部有检索资料支撑（查幻觉）</td><td><a href="10-rag-metrics.html">第 10 课</a> · <a href="15-faithfulness-internals.html">第 15 课</a></td></tr>
+  <tr><td class="mono">ContextPrecision</td><td>LLM 类</td><td>检索到的资料是否相关、且相关的排在前面</td><td><a href="10-rag-metrics.html">第 10 课</a> · <a href="16-context-metrics-internals.html">第 16 课</a></td></tr>
+  <tr><td class="mono">ContextRecall</td><td>LLM 类</td><td>该检索到的资料是否都召回了</td><td><a href="10-rag-metrics.html">第 10 课</a> · <a href="16-context-metrics-internals.html">第 16 课</a></td></tr>
+  <tr><td class="mono">AnswerRelevancy</td><td>LLM + Embedding</td><td>回答是否切题、不跑偏</td><td><a href="10-rag-metrics.html">第 10 课</a> · <a href="17-answer-metrics-internals.html">第 17 课</a></td></tr>
+  <tr><td class="mono">FactualCorrectness</td><td>LLM 类</td><td>回答与标准答案的事实一致度（claim 分解 + F1）</td><td><a href="17-answer-metrics-internals.html">第 17 课</a></td></tr>
+  <tr><td class="mono">AspectCritic</td><td>LLM 类</td><td>自定义"是 / 否"断言式评判（如"是否有害"）</td><td><a href="17-answer-metrics-internals.html">第 17 课</a></td></tr>
+  <tr><td class="mono">ToolCallAccuracy</td><td>Agent 类</td><td>Agent 的工具调用是否正确</td><td><a href="18-agent-metrics-internals.html">第 18 课</a></td></tr>
+  <tr><td class="mono">AgentGoalAccuracy</td><td>Agent 类</td><td>多轮对话是否达成用户目标</td><td><a href="18-agent-metrics-internals.html">第 18 课</a></td></tr>
+  <tr><td class="mono">TopicAdherence</td><td>Agent 类</td><td>对话是否守在允许的话题范围内</td><td><a href="18-agent-metrics-internals.html">第 18 课</a></td></tr>
+  <tr><td class="mono">BleuScore / RougeScore</td><td>传统类</td><td>n-gram / LCS 文本重叠（翻译、摘要）</td><td><a href="12-traditional-metrics.html">第 12 课</a></td></tr>
+  <tr><td class="mono">ExactMatch / StringPresence</td><td>传统类</td><td>字符串精确相等 / 是否包含 / 编辑距离</td><td><a href="12-traditional-metrics.html">第 12 课</a></td></tr>
+  <tr><td class="mono">DiscreteMetric / NumericMetric / RankingMetric</td><td>自定义</td><td>自己写离散 / 数值 / 排序评分标准</td><td><a href="11-custom-metrics.html">第 11 课</a></td></tr>
+</table>
+
+<p><strong>两个例外要记住</strong>：<span class="inline">AspectCritic</span> 目前<strong>只有</strong> legacy 版（<span class="mono">from ragas.metrics import AspectCritic</span>，会告警），collections 暂未提供；检索类还有<strong>非 LLM 版</strong>（按字符串距离 / ID 比对），同样只在 <span class="mono">ragas.metrics</span>（<a href="12-traditional-metrics.html">第 12 课</a>）。其余具名指标都已在 collections 落地。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> "导入即告警"是怎么实现的 <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 模块级 __getattr__ + 废弃名单</div>
+      <div class="a"><span class="mono">ragas/metrics/__init__.py</span> 的 <span class="inline">__all__</span> 只列基类与 Simple 栈；具名指标改放进一个 <span class="inline">_DEPRECATED_METRICS</span> 字典，再用模块级 <span class="inline">__getattr__</span> 拦截访问、发出告警后才返回实现：
+<pre class="code"><span class="kw">def</span> <span class="fn">__getattr__</span>(name):
+    <span class="kw">if</span> name <span class="kw">in</span> _DEPRECATED_METRICS:
+        warnings.warn(
+            _DEPRECATION_MESSAGE.format(name=name),
+            DeprecationWarning, stacklevel=<span class="st">2</span>,
+        )
+        <span class="kw">return</span> _DEPRECATED_METRICS[name]
+    <span class="kw">raise</span> AttributeError(...)</pre>
+      </div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 告警文案直接告诉你怎么改</div>
+      <div class="a">告警模板是："<span class="mono">Importing {name} from 'ragas.metrics' is deprecated and will be removed in v1.0. Please use 'ragas.metrics.collections' instead.</span>"——还附上正确写法 <span class="mono">from ragas.metrics.collections import {name}</span>。照着改导入路径即可，分数口径不变。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  两代指标的"门牌"都在 <span class="mono">src/ragas/metrics/__init__.py</span>：<span class="mono">__all__</span> 只导出基类与 Simple 栈（<span class="mono">Metric</span> / <span class="mono">MetricWithLLM</span> / <span class="mono">DiscreteMetric</span> / <span class="mono">NumericMetric</span> / <span class="mono">RankingMetric</span> / <span class="mono">MetricResult</span> …），具名指标进 <span class="mono">_DEPRECATED_METRICS</span> 字典，由模块级 <span class="mono">__getattr__</span> 拦截并发 <span class="mono">DeprecationWarning</span>（文案 <span class="mono">_DEPRECATION_MESSAGE</span>）。
+  现代具名指标的"正门"是 <span class="mono">src/ragas/metrics/collections/__init__.py</span>（其 <span class="mono">__all__</span> 列出 Faithfulness、ContextPrecision、ToolCallAccuracy… ，但<strong>不含</strong> AspectCritic）。单轮 / 多轮之分见 <span class="mono">metrics/base.py</span> 的 <span class="mono">MetricType</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>两代指标但算法一致</strong>：collections 是同一套打分逻辑的"现代封装"，迁移只换导入路径，<strong>分数口径不变</strong>。</li>
+    <li><strong>接口统一、可混用组合</strong>：collections 指标都是"构造注入依赖 → <span class="inline">await ascore(**kwargs)</span> 返回 <span class="inline">MetricResult</span>"，不同指标能拼成自己的套餐。</li>
+    <li><strong>公开面小而稳</strong>：<span class="inline">__all__</span> 只留基类与 Simple 栈，具名指标集中到 collections，旧路径用 <span class="inline">__getattr__</span> 平滑过渡到 v1.0。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>一张<strong>指标地图</strong>：LLM 类（裁判模型）/ 传统类（确定性算法）/ Agent 类（多轮 + 工具）/ 自定义（Simple 栈）。</li>
+    <li><strong>具名指标从 <span class="mono">ragas.metrics.collections</span> 导入</strong>；从 <span class="mono">ragas.metrics</span> 导入它们会告警、v1.0 移除。</li>
+    <li>基类与 <span class="mono">DiscreteMetric</span> / <span class="mono">NumericMetric</span> / <span class="mono">RankingMetric</span> 仍留在 <span class="mono">ragas.metrics</span>（未废弃）。</li>
+    <li>接下来三课细讲：RAG 四件套（<a href="10-rag-metrics.html">第 10 课</a>）、自定义 Simple 栈（<a href="11-custom-metrics.html">第 11 课</a>）、传统指标（<a href="12-traditional-metrics.html">第 12 课</a>）。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="08-experiment.html"><div class="dir">← 上一课</div><div class="ttl">现代入口 @experiment</div></a><a class="next" href="10-rag-metrics.html"><div class="dir">下一课 →</div><div class="ttl">RAG 四件套用法</div></a></div>
 </div>

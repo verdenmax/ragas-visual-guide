@@ -267,9 +267,110 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>自定义指标（Simple 栈）</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+内置指标不够用时，ragas 让你<strong>自己写指标</strong>。最轻量的是 <strong>Simple 栈</strong>：三种指标类（离散 / 数值 / 排序）加三个同名装饰器，
+几行就能把"评分标准"变成可调用、可版本化的代码。它们都住在 <span class="inline">ragas.metrics</span>，<strong>不在</strong>废弃之列。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  自定义指标就像给裁判写一份<strong>评分细则</strong>：你规定"只能打这几个等级 / 这个分数区间 / 排出前几名"，再写一句 prompt 让 LLM 照章打分。
+  ragas 负责把 LLM 的输出<strong>卡死在你允许的取值</strong>里，不会冒出意料之外的答案。
+</div>
+
+<h2>三类指标 + 三装饰器</h2>
+<p>按"输出长什么样"分三种，每种都有"类"和"装饰器"两副面孔：</p>
+
+<table class="t">
+  <tr><th>类</th><th>装饰器</th><th><span class="mono">allowed_values</span> 默认</th><th>输出</th></tr>
+  <tr><td class="mono">DiscreteMetric</td><td class="mono">@discrete_metric</td><td class="mono">["pass", "fail"]</td><td>离散类别（str，限定在 allowed_values）</td></tr>
+  <tr><td class="mono">NumericMetric</td><td class="mono">@numeric_metric</td><td class="mono">(0.0, 1.0)</td><td>连续数值（float，限定在区间）</td></tr>
+  <tr><td class="mono">RankingMetric</td><td class="mono">@ranking_metric</td><td class="mono">2</td><td>排序列表（List[str]，长度为 allowed_values）</td></tr>
+</table>
+
+<p>三者都继承 <span class="inline">SimpleLLMMetric</span>（再上层是 <span class="inline">SimpleBaseMetric</span>）。<strong>类</strong>适合需要复用 / 保存（<span class="inline">load</span>）的指标，<strong>装饰器</strong>适合把一个现成函数快速变成指标。</p>
+
+<h2>类风格：一个 DiscreteMetric</h2>
+<pre class="code"><span class="kw">from</span> ragas.metrics <span class="kw">import</span> DiscreteMetric
+<span class="kw">from</span> ragas.llms <span class="kw">import</span> llm_factory
+<span class="kw">from</span> openai <span class="kw">import</span> OpenAI
+
+llm = llm_factory(<span class="st">"gpt-4o-mini"</span>, client=OpenAI())
+
+metric = DiscreteMetric(
+    name=<span class="st">"summary_accuracy"</span>,
+    allowed_values=[<span class="st">"accurate"</span>, <span class="st">"inaccurate"</span>],
+    prompt=<span class="st">"判断摘要是否准确：\nResponse: {response}"</span>,
+)
+result = metric.score(llm=llm, response=<span class="st">"……"</span>)
+print(result.value, result.reason)  <span class="cm"># 'accurate' / 'inaccurate' + 给分理由</span></pre>
+
+<p>注意 <span class="inline">llm</span> 在<strong>打分时</strong>传入（<span class="inline">score</span> / <span class="inline">ascore</span> 内部 <span class="mono">kwargs.pop("llm")</span>），其余关键字（这里是 <span class="inline">response</span>）用来填 prompt 里的占位符。</p>
+
+<h2>装饰器风格：把函数变成指标</h2>
+<pre class="code"><span class="kw">from</span> ragas.metrics <span class="kw">import</span> discrete_metric
+
+<span class="kw">@</span><span class="fn">discrete_metric</span>(name=<span class="st">"sentiment"</span>, allowed_values=[<span class="st">"positive"</span>, <span class="st">"neutral"</span>, <span class="st">"negative"</span>])
+<span class="kw">def</span> <span class="fn">sentiment</span>(user_input: str, response: str) -> str:
+    <span class="st">'''按关键词判断回答情绪（纯规则，无需 LLM）。'''</span>
+    text = response.lower()
+    <span class="kw">if</span> <span class="st">"great"</span> <span class="kw">in</span> text <span class="kw">or</span> <span class="st">"good"</span> <span class="kw">in</span> text:
+        <span class="kw">return</span> <span class="st">"positive"</span>
+    <span class="kw">if</span> <span class="st">"bad"</span> <span class="kw">in</span> text <span class="kw">or</span> <span class="st">"poor"</span> <span class="kw">in</span> text:
+        <span class="kw">return</span> <span class="st">"negative"</span>
+    <span class="kw">return</span> <span class="st">"neutral"</span>
+
+result = sentiment.score(user_input=<span class="st">"今天如何？"</span>, response=<span class="st">"It was great!"</span>)
+print(result.value)  <span class="cm"># "positive"</span></pre>
+
+<p>装饰器会按 <span class="inline">allowed_values</span> 的类型<strong>自动选指标种类</strong>（list → 离散、tuple → 数值、int → 排序）。函数返回的普通值会被自动包成 <span class="inline">MetricResult</span> 并按 allowed_values 校验。
+<span class="inline">score()</span> / <span class="inline">ascore()</span> <strong>只接受关键字参数</strong>——传位置参数会抛出一条带纠正提示的 <span class="mono">TypeError</span>。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 怎么把 LLM 输出"卡死"在 allowed_values <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 __post_init__ + Literal + 自动响应模型</div>
+      <div class="a"><span class="inline">DiscreteMetric.__post_init__</span> 把 <span class="inline">allowed_values</span> 转成 <span class="inline">Literal[...]</span>，再用 <span class="inline">create_auto_response_model</span> 动态造一个 pydantic 响应模型：
+<pre class="code">self._response_model = create_auto_response_model(
+    <span class="st">"DiscreteResponseModel"</span>,
+    reason=(str, Field(..., description=<span class="st">"Reasoning for the value"</span>)),
+    value=(Literal[values], Field(..., description=<span class="st">"The value predicted"</span>)),
+)</pre>
+        于是 LLM 必须返回 <span class="mono">{reason, value}</span>，且 <span class="mono">value</span> 只能是允许值之一——从源头杜绝"答非所选"。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 三种栈的响应模型差异</div>
+      <div class="a"><span class="inline">NumericMetric</span> 的 <span class="mono">value</span> 是 <span class="mono">float</span>、<span class="inline">RankingMetric</span> 是 <span class="mono">List[str]</span>；校验分别交给 <span class="mono">DiscreteValidator</span> / <span class="mono">NumericValidator</span> / <span class="mono">RankingValidator</span>（装饰器用 <span class="inline">get_validator_for_allowed_values</span> 按类型自动挑）。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  Simple 栈定义在 <span class="mono">src/ragas/metrics/</span>：<span class="mono">discrete.py</span>（<span class="mono">DiscreteMetric</span>，默认 <span class="mono">allowed_values=["pass", "fail"]</span>）、<span class="mono">numeric.py</span>（<span class="mono">NumericMetric</span>，默认 <span class="mono">(0.0, 1.0)</span>）、<span class="mono">ranking.py</span>（<span class="mono">RankingMetric</span>，默认 <span class="mono">2</span>）；
+  三个装饰器在 <span class="mono">decorator.py</span> 的 <span class="mono">create_metric_decorator</span>（<span class="mono">score</span> 强制关键字、按 <span class="mono">allowed_values</span> 类型选 validator）。
+  基类 <span class="mono">SimpleLLMMetric</span> / <span class="mono">SimpleBaseMetric</span> 与 <span class="mono">create_auto_response_model</span> 在 <span class="mono">base.py</span>（<span class="mono">score</span> 内 <span class="mono">kwargs.pop("llm")</span> 后用 <span class="mono">self.prompt.format(**kwargs)</span> 调 LLM）。它们都在 <span class="mono">ragas.metrics</span> 的 <span class="mono">__all__</span> 里——<strong>未废弃</strong>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>用 <span class="inline">Literal</span> 强约束输出</strong>：<span class="inline">__post_init__</span> 自动按 allowed_values 生成 pydantic 响应模型，LLM 只能吐出合法取值，省掉解析与兜底。</li>
+    <li><strong>类 / 装饰器两种风格</strong>：要复用、保存就用类；把现成函数一键变指标就用装饰器。</li>
+    <li><strong>评分标准即代码</strong>：自定义指标能进版本库、随实验一起 <span class="inline">version_experiment</span> 回溯（<a href="08-experiment.html">第 8 课</a>）。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>Simple 栈 = 三类（<span class="mono">DiscreteMetric</span> / <span class="mono">NumericMetric</span> / <span class="mono">RankingMetric</span>）+ 三装饰器，都在 <span class="mono">ragas.metrics</span>（未废弃）。</li>
+    <li>默认 <span class="inline">allowed_values</span>：离散 <span class="mono">["pass", "fail"]</span>、数值 <span class="mono">(0.0, 1.0)</span>、排序 <span class="mono">2</span>。</li>
+    <li><span class="inline">__post_init__</span> 用 <span class="inline">Literal[...]</span> + <span class="inline">create_auto_response_model</span> 把输出卡进 allowed_values；<span class="inline">score()</span> 只收关键字、<span class="inline">llm</span> 在打分时传。</li>
+    <li>想深入打分背后的基类与结果对象，看 <span class="mono">Metric</span> 基类（<a href="13-metric-base.html">第 13 课</a>）与 <span class="mono">MetricResult</span>（<a href="14-metric-result.html">第 14 课</a>）。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="10-rag-metrics.html"><div class="dir">← 上一课</div><div class="ttl">RAG 四件套用法</div></a><a class="next" href="12-traditional-metrics.html"><div class="dir">下一课 →</div><div class="ttl">传统 / 非 LLM 指标</div></a></div>
 </div>
