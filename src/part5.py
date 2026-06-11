@@ -279,7 +279,7 @@ LESSON_22 = r"""
   <tr><td><strong>核心方法</strong></td><td class="mono">embed_query / embed_documents</td><td class="mono">embed_text / aembed_text</td></tr>
   <tr><td><strong>批处理</strong></td><td>由 langchain 提供</td><td class="mono">embed_texts / aembed_texts（默认实现）</td></tr>
 </table>
-<p class="inline">类名只差一个字母 <span class="mono">s</span>，极易看混——带 s 是老的、不带 s 是新的。</p>
+<p>类名只差一个字母 <span class="mono">s</span>，极易看混——带 s 是老的、不带 s 是新的。</p>
 
 <h2>四个现代 provider</h2>
 <pre class="code"><span class="cm"># 都实现 BaseRagasEmbedding（不带 s）的 embed_text / aembed_text</span>
@@ -290,7 +290,7 @@ LiteLLMEmbeddings       <span class="cm"># embeddings/litellm_provider.py（统�
 <p><span class="inline">embedding_factory</span> 是统一入口，能自动判断该给老接口还是新接口：</p>
 <pre class="code"><span class="kw">def</span> <span class="fn">embedding_factory</span>(provider=<span class="st">"openai"</span>, model=<span class="kw">None</span>, run_config=<span class="kw">None</span>,
     client=<span class="kw">None</span>, interface=<span class="st">"auto"</span>, base_url=<span class="kw">None</span>, cache=<span class="kw">None</span>, **kwargs)</pre>
-<p class="inline">注：<span class="mono">modern_embedding_factory</span> 只是已弃用的别名，新代码直接用 <span class="mono">embedding_factory</span>。</p>
+<p>注：<span class="mono">modern_embedding_factory</span> 只是已弃用的别名，新代码直接用 <span class="mono">embedding_factory</span>。</p>
 
 <h2>从 LLM 反推 embedding 提供商</h2>
 <p>这是省心的关键一招。<span class="inline">evaluate()</span> 里如果某指标需要 embedding 而你没传，会调 <span class="inline">_infer_embedding_provider_from_llm(llm)</span>：读 <span class="mono">llm.provider</span>（或按 LLM 类名映射），缺省回退 <span class="mono">"openai"</span>，再用<strong>同一个 client</strong> 建 embedding：</p>
