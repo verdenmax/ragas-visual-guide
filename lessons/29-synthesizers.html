@@ -267,9 +267,85 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>Synthesizers</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+有了知识图谱、persona 和 scenario 配方，谁来真正"出题"？答案是 <span class="mono">Synthesizer</span>（合成器 / 出题官）。
+ragas 区分<strong>单跳</strong>（一个节点）和<strong>多跳</strong>（跨节点推理）两类，并按比例自动分配题量。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  把出题交给两类<strong>出题官</strong>：一类专出<strong>单跳题</strong>——翻一页、对着一个知识点就能答；
+  另一类专出<strong>多跳题</strong>——必须把好几页串起来推理才能答。教务处（<span class="inline">default_query_distribution</span>）再按比例把题量分给他们。
+</div>
+
+<h2>两类出题官：单跳 vs 多跳</h2>
+<table class="t">
+  <tr><th>Synthesizer</th><th>用几个节点</th><th>靠什么找组合</th><th>题型</th></tr>
+  <tr><td class="mono">SingleHopSpecificQuerySynthesizer</td><td>单节点</td><td><span class="mono">get_node_clusters</span> 选含 <span class="mono">entities</span> 的 chunk</td><td>具体 · 单跳</td></tr>
+  <tr><td class="mono">MultiHopAbstractQuerySynthesizer</td><td>多节点（路径）</td><td><span class="mono">find_n_indirect_clusters</span>（<span class="mono">summary_similarity</span> 边）</td><td>抽象 · 多跳</td></tr>
+  <tr><td class="mono">MultiHopSpecificQuerySynthesizer</td><td>两节点 + 一条边</td><td><span class="mono">find_two_nodes_single_rel</span>（<span class="mono">entities_overlap</span> 边）</td><td>具体 · 多跳</td></tr>
+</table>
+<p>单跳与多跳分别有自己的场景类 <span class="inline">SingleHopScenario</span>（带 <span class="mono">term</span>）和 <span class="inline">MultiHopScenario</span>（带 <span class="mono">combinations</span>），都继承自第 28 课的 <span class="inline">BaseScenario</span>。</p>
+
+<h2>两步出题：generate_scenarios → generate_sample</h2>
+<p>每个 synthesizer 出题都分<strong>两步</strong>，由基类 <span class="inline">BaseSynthesizer</span> 统一编排：</p>
+<pre class="code"><span class="cm"># ① 场景生成：先决定"出哪些题"——挑节点、配 persona / 风格 / 长度</span>
+scenarios = <span class="kw">await</span> synth.generate_scenarios(n=5, knowledge_graph=kg, persona_list=personas)
+
+<span class="cm"># ② 样本生成：再决定"题面长啥样"——按场景调 LLM 产出问答对</span>
+sample = <span class="kw">await</span> synth.generate_sample(scenarios[0])</pre>
+<p>这一拆分把"<strong>出哪些题</strong>"和"<strong>题面怎么写</strong>"解耦：场景阶段只在图上做组合与采样（便宜、可控），样本阶段才真正花 LLM 调用把问答写出来。</p>
+
+<h2>default_query_distribution：自动按图能力配题型</h2>
+<p>不指定题型配比时，<span class="inline">default_query_distribution</span> 默认给上面三种 synthesizer <strong>等概率</strong>。
+但它会先用每个 synthesizer 的 <span class="mono">get_node_clusters</span> 探一探：<strong>图谱撑不起的题型直接剔除</strong>：</p>
+<pre class="code"><span class="kw">from</span> ragas.testset.synthesizers <span class="kw">import</span> default_query_distribution
+
+dist = default_query_distribution(llm, kg)
+<span class="cm"># 对每个候选 synthesizer 调 get_node_clusters(kg)；非空才保留</span>
+<span class="cm"># 保留下来的等概率：例如三种都可用 → 各 1/3</span></pre>
+<p>所以如果你的文档之间几乎没有可连的边，多跳题型就会被自动跳过，不会硬出一堆无效的多跳题。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> "abstract" 和 "specific" 多跳有什么区别？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 看它们靠什么边找组合</div>
+      <div class="a"><strong>抽象多跳</strong>（<span class="inline">MultiHopAbstract…</span>）沿 <span class="mono">summary_similarity</span> 边、用 <span class="inline">find_n_indirect_clusters</span> 取一条<strong>路径</strong>，问的是跨多段、偏综合 / 解释性的问题；
+        <strong>具体多跳</strong>（<span class="inline">MultiHopSpecific…</span>）沿 <span class="mono">entities_overlap</span> 边、用 <span class="inline">find_two_nodes_single_rel</span> 取<strong>两节点 + 边</strong>，问的是依赖具体事实拼接的问题。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 默认为什么没有"单跳抽象"题</div>
+      <div class="a">默认分布里只放了 <span class="inline">SingleHopSpecificQuerySynthesizer</span>（单跳具体），多跳才分抽象 / 具体两种。单跳抽象不在默认题型里——当然你可以自定义 <span class="inline">QueryDistribution</span> 自行增减。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  默认配比在 <span class="mono">testset/synthesizers/__init__.py</span> 的 <span class="mono">default_query_distribution</span>（类型别名 <span class="mono">QueryDistribution</span>）。
+  两步编排在 <span class="mono">synthesizers/base.py</span>（<span class="mono">BaseSynthesizer.generate_scenarios</span> / <span class="mono">generate_sample</span>）。
+  单跳在 <span class="mono">synthesizers/single_hop/specific.py</span>（<span class="mono">SingleHopSpecificQuerySynthesizer</span>、<span class="mono">get_node_clusters</span>）；
+  多跳在 <span class="mono">synthesizers/multi_hop/abstract.py</span> 与 <span class="mono">multi_hop/specific.py</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>两步解耦</strong>："场景生成"（图上组合采样，便宜）与"样本生成"（LLM 写题面，贵）分开，便于调试与并发。</li>
+    <li><strong>按图能力配题型</strong>：<span class="inline">default_query_distribution</span> 先用 <span class="inline">get_node_clusters</span> 过滤掉图谱撑不起的题型，避免无效出题。</li>
+    <li><strong>题型可插拔</strong>：单跳 / 多跳都继承统一基类，自定义 <span class="inline">QueryDistribution</span> 即可增删题型、调整配比。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>题型由 synthesizer 决定：<strong>单跳具体 · 多跳抽象 · 多跳具体</strong>三种默认。</li>
+    <li>出题分两步：<strong>generate_scenarios（出哪些题）→ generate_sample（写题面）</strong>。</li>
+    <li>配比由 <span class="inline">default_query_distribution</span> 给（默认等概率），并自动剔除图谱撑不起的题型。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="28-persona-scenario.html"><div class="dir">← 上一课</div><div class="ttl">Persona 与 Scenario</div></a><a class="next" href="30-testset-generator.html"><div class="dir">下一课 →</div><div class="ttl">TestsetGenerator 端到端</div></a></div>
 </div>

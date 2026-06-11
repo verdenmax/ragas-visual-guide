@@ -267,9 +267,81 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>Persona 与 Scenario</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+同样一份资料，"产品经理"和"工程师"会问出完全不同的问题；同一个问题，又能用<strong>不同风格、不同长度</strong>问。
+ragas 把这两层变化拆成 <span class="mono">Persona</span>（谁在问）和 <span class="mono">Scenario</span>（怎么问），用<strong>组合</strong>撑开测试集的多样性。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  出卷子前先想清楚两件事：<strong>"谁来考"</strong>——给小学生和给研究生的题肯定不一样（persona）；
+  <strong>"怎么出"</strong>——同一个考点可以出成简答、出成长论述，也可以故意写得口语化甚至带点错别字（scenario 的风格 / 长度）。
+  把"谁来考 × 怎么出 × 考哪些知识点"排列组合，一套题的<strong>多样性</strong>就出来了。
+</div>
+
+<h2>Persona：从图谱里长出来的"提问者"</h2>
+<p>一个 <span class="inline">Persona</span> 很简单，就两字段：<span class="mono">name</span> 和 <span class="mono">role_description</span>。
+关键在于它<strong>不用你手写</strong>——<span class="inline">generate_personas_from_kg</span> 会读图谱里各文档的摘要，按相似度聚类，给每个代表性摘要让 LLM 生成一个贴合内容的 persona：</p>
+<pre class="code"><span class="kw">class</span> <span class="fn">Persona</span>(BaseModel):
+    name: str
+    role_description: str
+
+<span class="kw">from</span> ragas.testset.persona <span class="kw">import</span> generate_personas_from_kg
+
+personas = generate_personas_from_kg(kg=kg, llm=llm, num_personas=3)
+<span class="cm"># 例：Persona(name="Digital Marketing Specialist",</span>
+<span class="cm">#            role_description="Focuses on engaging audiences and growing the brand online.")</span></pre>
+
+<h2>Scenario：一次出题的"配方"</h2>
+<p>每出一道题，先要定一份<strong>配方</strong>——这就是 <span class="inline">BaseScenario</span>，四个要素：</p>
+<table class="t">
+  <tr><th>要素</th><th>含义</th><th>取值</th></tr>
+  <tr><td class="mono">nodes</td><td>这道题用到哪些节点</td><td>单跳=1 个，多跳=多个</td></tr>
+  <tr><td class="mono">persona</td><td>谁来问</td><td>来自上面生成的 persona</td></tr>
+  <tr><td class="mono">style</td><td>问法风格（<span class="mono">QueryStyle</span>）</td><td>MISSPELLED · PERFECT_GRAMMAR · POOR_GRAMMAR · WEB_SEARCH_LIKE</td></tr>
+  <tr><td class="mono">length</td><td>问句长度（<span class="mono">QueryLength</span>）</td><td>SHORT · MEDIUM · LONG</td></tr>
+</table>
+<p>具体的 synthesizer 会在 <span class="inline">BaseScenario</span> 上再加自己的字段——比如单跳加 <span class="mono">term</span>（主题词）、多跳加 <span class="mono">combinations</span>（跨节点的概念组合）。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 多样性为什么靠"组合"而不是靠提示词？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 一道题 = 一个组合</div>
+      <div class="a">把 <strong>persona × style × length × nodes</strong> 排列组合，每一种组合就对应一道<strong>风味不同</strong>的题：
+        "营销专员 + 口语化 + 短问句 + 节点A" 和 "工程师 + 规范语法 + 长问句 + 节点A、B" 会问出截然不同的东西。
+        多样性是<strong>结构化、可枚举、可控</strong>的，而不是靠一句"请多样化一点"碰运气。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ persona 为什么要从 KG 生成</div>
+      <div class="a">硬编码的 persona（"好奇的用户"）与你的资料未必搭。从图谱摘要聚类生成，能得到<strong>贴合文档主题</strong>的提问者（金融文档→分析师、营销文档→营销专员），出的题自然更对路。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  <span class="mono">testset/persona.py</span> 定义 <span class="mono">Persona</span>、<span class="mono">PersonaGenerationPrompt</span> 和 <span class="mono">generate_personas_from_kg</span>（按 <span class="mono">summary_embedding</span> 余弦相似度聚类，取代表性摘要并行生成）。
+  <span class="mono">testset/synthesizers/base.py</span> 定义 <span class="mono">BaseScenario</span>（<span class="mono">nodes</span> / <span class="mono">style</span> / <span class="mono">length</span> / <span class="mono">persona</span>）、枚举 <span class="mono">QueryStyle</span> 与 <span class="mono">QueryLength</span>，以及出题基类 <span class="mono">BaseSynthesizer</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>多样性可控</strong>：<span class="inline">persona × style × length</span> 是结构化组合，能枚举、能配比，而不是听天由命。</li>
+    <li><strong>persona 从 KG 自动产出</strong>：贴合你文档的真实主题，比硬编码角色更接地气。</li>
+    <li><strong>scenario 与 synthesizer 解耦</strong>：基类只管"配方四要素"，各题型在其上叠加自己的字段，扩展新题型很顺手。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li><span class="inline">Persona</span> = <strong>name + role_description</strong>，由 <span class="inline">generate_personas_from_kg</span> 从图谱自动生成。</li>
+    <li><span class="inline">Scenario</span> = <strong>nodes + style + length + persona</strong>，是"出一道题"的配方。</li>
+    <li>多样性 = <strong>persona + 风格 + 长度</strong>（再乘上节点）的组合，可控可枚举。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="27-transforms.html"><div class="dir">← 上一课</div><div class="ttl">Transforms</div></a><a class="next" href="29-synthesizers.html"><div class="dir">下一课 →</div><div class="ttl">Synthesizers</div></a></div>
 </div>

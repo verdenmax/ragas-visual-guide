@@ -267,9 +267,95 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>知识图谱</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+要让机器"跨章节出题"，先得让它<strong>看懂文档之间的关系</strong>。ragas 的办法是把文档拆成<strong>节点</strong>、
+在节点之间连<strong>边</strong>，组成一张 <span class="mono">KnowledgeGraph</span>（知识图谱）——它是整条测试生成流水线的<strong>中枢数据结构</strong>。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  把一摞文档摊开，每个知识点钉成一颗<strong>图钉（节点）</strong>，再用线把相关的图钉<strong>连起来（边）</strong>，就成了一张"知识地图"。
+  想出一道综合题？顺着线找<strong>几颗连在一起的图钉</strong>就行——这正是"多跳题"的来源。
+</div>
+
+<h2>三个基本元件：Node / Relationship / NodeType</h2>
+<p>知识图谱由两类东西构成——<strong>节点</strong>和<strong>边</strong>，节点还带一个<strong>类型</strong>：</p>
+
+<table class="t">
+  <tr><th>元件</th><th>是什么</th><th>关键字段 / 方法</th></tr>
+  <tr><td class="mono">NodeType</td><td>节点类型枚举</td><td><span class="mono">DOCUMENT</span>（整篇）/ <span class="mono">CHUNK</span>（切出的小块）/ <span class="mono">UNKNOWN</span></td></tr>
+  <tr><td class="mono">Node</td><td>图里的一个知识点</td><td><span class="mono">id</span> · <span class="mono">properties</span> · <span class="mono">type</span>；<span class="mono">add_property</span> / <span class="mono">get_property</span></td></tr>
+  <tr><td class="mono">Relationship</td><td>两节点间的一条边</td><td><span class="mono">source</span> · <span class="mono">target</span> · <span class="mono">type</span> · <span class="mono">bidirectional</span></td></tr>
+</table>
+
+<pre class="code"><span class="kw">class</span> <span class="fn">NodeType</span>(str, Enum):
+    UNKNOWN  = <span class="st">""</span>
+    DOCUMENT = <span class="st">"document"</span>      <span class="cm"># 整篇文档</span>
+    CHUNK    = <span class="st">"chunk"</span>         <span class="cm"># 切出来的小块</span>
+
+node = Node(type=NodeType.DOCUMENT, properties={<span class="st">"page_content"</span>: text})
+node.add_property(<span class="st">"summary"</span>, <span class="st">"……"</span>)   <span class="cm"># key 大小写不敏感（内部转小写）</span>
+rel = Relationship(source=a, target=b, type=<span class="st">"summary_similarity"</span>, bidirectional=<span class="kw">True</span>)</pre>
+
+<h2>KnowledgeGraph：存节点 + 存边 + 落盘</h2>
+<p><span class="inline">KnowledgeGraph</span> 内部就是两个列表 <span class="mono">nodes</span> 与 <span class="mono">relationships</span>。
+<span class="inline">add()</span> 会按类型自动分派，<span class="inline">save()</span> / <span class="inline">load()</span> 把整张图存成 / 读回 JSON（UTF-8）：</p>
+<pre class="code">kg = KnowledgeGraph()
+kg.add(node)                          <span class="cm"># add() 自动分派 Node / Relationship</span>
+kg.add(rel)
+kg.save(<span class="st">"kg.json"</span>)               <span class="cm"># 建图很贵，存盘后可反复复用</span>
+kg = KnowledgeGraph.load(<span class="st">"kg.json"</span>)</pre>
+
+<h2>簇查询：为"多跳出题"找组合</h2>
+<p>图建好后，怎么找出"能跨多个节点一起出题"的组合？<span class="inline">KnowledgeGraph</span> 提供了三个查询方法：</p>
+
+<table class="t">
+  <tr><th>方法</th><th>返回</th><th>用途</th></tr>
+  <tr><td class="mono">find_indirect_clusters</td><td>List[Set[Node]]（Leiden 社区发现 + 路径）</td><td>找间接相连的节点簇</td></tr>
+  <tr><td class="mono">find_n_indirect_clusters</td><td>n 个 Set[Node]（路径，针对大图做了优化）</td><td>抽象多跳题：取 n 条跨节点路径</td></tr>
+  <tr><td class="mono">find_two_nodes_single_rel</td><td>(Node, Relationship, Node) 三元组列表</td><td>具体多跳题：取"两节点 + 一条边"</td></tr>
+</table>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> "indirect cluster"（间接簇）到底指什么？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 一条路径就是一个簇</div>
+      <div class="a">源码注释说得很直白：若图里存在 <span class="mono">A → B → C → D</span> 这条路径，则 <span class="mono">{A, B, C, D}</span> 就构成一个簇；
+        若还有 <span class="mono">A → B → C → E</span>，那是另一个簇。<span class="inline">depth_limit</span> 控制路径最长几跳（默认 3）。
+        这些"虽不直接相连、却经由其他节点产生关联"的节点组合，正是多跳题需要的素材。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 为什么单跳题用不到簇查询</div>
+      <div class="a">单跳题只需<strong>一个</strong>节点，synthesizer 直接挑选符合条件的节点即可；只有<strong>跨节点</strong>的多跳题，才需要靠簇 / 三元组查询把"能连起来的节点"找出来（<a href="29-synthesizers.html">第 29 课</a>）。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  核心都在 <span class="mono">testset/graph.py</span>：枚举 <span class="mono">NodeType</span>、模型 <span class="mono">Node</span> / <span class="mono">Relationship</span>、
+  数据类 <span class="mono">KnowledgeGraph</span>（含 <span class="mono">add</span> / <span class="mono">save</span> / <span class="mono">load</span> / <span class="mono">get_node_by_id</span> 及三个簇查询方法）。
+  另有 <span class="mono">testset/graph_queries.py</span> 提供 <span class="mono">get_child_nodes</span> / <span class="mono">get_parent_nodes</span> 沿 <span class="mono">child</span> 边做层级遍历。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>用图结构承载文档关系</strong>：节点 + 边的表示天然支持单跳（单节点）与多跳（跨节点）两种出题。</li>
+    <li><strong>簇查询找"可跨节点出题"的组合</strong>：<span class="inline">find_n_indirect_clusters</span> 取路径、<span class="inline">find_two_nodes_single_rel</span> 取三元组，分别服务抽象 / 具体多跳。</li>
+    <li><strong>可序列化复用</strong>：<span class="inline">save</span> / <span class="inline">load</span> 把昂贵的建图结果落盘，调参出题时不必每次重建。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>知识图谱 = <strong>Node + Relationship</strong>，节点带 <span class="mono">NodeType</span>（DOCUMENT / CHUNK）。</li>
+    <li><span class="inline">KnowledgeGraph</span> 是测试生成的<strong>中枢数据结构</strong>：存节点、存边、可 <span class="mono">save</span> / <span class="mono">load</span>。</li>
+    <li>三个簇查询（<span class="mono">find_indirect_clusters</span> / <span class="mono">find_n_indirect_clusters</span> / <span class="mono">find_two_nodes_single_rel</span>）为多跳出题找组合。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="25-testgen-overview.html"><div class="dir">← 上一课</div><div class="ttl">为什么自动造测试集</div></a><a class="next" href="27-transforms.html"><div class="dir">下一课 →</div><div class="ttl">Transforms</div></a></div>
 </div>

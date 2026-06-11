@@ -267,9 +267,86 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>TestsetGenerator 端到端</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+前面五课的零件——知识图谱、transforms、persona、scenario、synthesizer——到这里被 <span class="mono">TestsetGenerator</span> <strong>串成一条龙</strong>：
+投入一堆文档，产出一套<strong>可直接评测</strong>的测试集。本课走通这条端到端流水线。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  <span class="inline">TestsetGenerator</span> 像一台<strong>全自动出卷机</strong>：你把教材（文档）塞进去，按一下"出 10 道题"的按钮，
+  它内部依次完成<strong>建图 → 设定考生 → 排题 → 写题</strong>，最后吐出一份装订好的卷子——还能<strong>一键转成</strong>评测线认得的格式。
+</div>
+
+<h2>一行调用的背后</h2>
+<p>最常见的用法只有三行——构造生成器、喂文档出题、转成评测数据集：</p>
+<pre class="code"><span class="kw">from</span> ragas.testset <span class="kw">import</span> TestsetGenerator
+
+generator = TestsetGenerator(llm=generator_llm, embedding_model=generator_embeddings)
+dataset = generator.generate_with_langchain_docs(docs, testset_size=10)
+
+eval_dataset = dataset.to_evaluation_dataset()   <span class="cm"># 回到评测线（EvaluationDataset）</span></pre>
+<p>除了 <span class="inline">generate_with_langchain_docs</span>，还有 <span class="inline">from_langchain</span> / <span class="inline">from_llama_index</span> 两个类方法帮你包好 LLM 与 embedding，以及面向 LlamaIndex 文档、预切块文档的对应入口。</p>
+
+<h2>generate() 的内部流程</h2>
+<p><span class="inline">generate_with_langchain_docs</span> 先把文档转成节点、<span class="inline">apply_transforms</span> 建好图，再调 <span class="inline">generate()</span>。后者的步骤是：</p>
+<ol>
+  <li><strong>定题型配比</strong>：没传就用 <span class="inline">default_query_distribution(llm, kg)</span>（<a href="29-synthesizers.html">第 29 课</a>）。</li>
+  <li><strong>生成 persona</strong>：<span class="inline">generate_personas_from_kg</span>（默认 <span class="mono">num_personas=3</span>）。</li>
+  <li><strong>切份额</strong>：<span class="inline">calculate_split_values</span> 按配比把 <span class="mono">testset_size</span> 分给每个 synthesizer（向上取整）。</li>
+  <li><strong>Scenario Generation</strong>：开一个 <span class="inline">Executor</span> 并发跑各 synthesizer 的 <span class="mono">generate_scenarios</span>。</li>
+  <li><strong>Sample Generation</strong>：再开一个 <span class="inline">Executor</span> 并发跑 <span class="mono">generate_sample</span>，把每个场景写成问答。</li>
+  <li><strong>打包</strong>：每条样本包成 <span class="inline">TestsetSample</span>（带 <span class="mono">synthesizer_name</span>），汇总为 <span class="inline">Testset</span>。</li>
+</ol>
+<p>两个阶段各自用 <span class="inline">new_group</span> 起了名为 <span class="mono">"Scenario Generation"</span> 和 <span class="mono">"Sample Generation"</span> 的回调组，便于在追踪里<strong>分阶段</strong>看进度与耗时（<a href="24-callbacks-cost-cache.html">第 24 课</a>）。</p>
+
+<h2>产物 Testset：可直接评测</h2>
+<p><span class="inline">Testset</span> 装着一串 <span class="inline">TestsetSample</span>，提供两个衔接评测线的关键方法：</p>
+<table class="t">
+  <tr><th>方法</th><th>作用</th></tr>
+  <tr><td class="mono">to_evaluation_dataset()</td><td>转成 <span class="mono">EvaluationDataset</span>，直接喂给 <span class="mono">evaluate</span> / <span class="mono">@experiment</span>（<a href="06-two-datasets.html">第 6</a>、<a href="07-evaluate.html">7</a>、<a href="08-experiment.html">8 课</a>）</td></tr>
+  <tr><td class="mono">from_annotated(path)</td><td>从人工标注的 JSON 里只挑 <span class="mono">approved</span> 的样本，组成精选 Testset</td></tr>
+</table>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 为什么要分"两个 Executor 阶段"？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 先全量出场景，再全量写题</div>
+      <div class="a">第一阶段把<strong>所有 synthesizer 的场景</strong>都生成完、收齐，第二阶段才统一把这些场景<strong>并发写成样本</strong>。
+        这样每个阶段内部都能吃满并发（<a href="23-executor.html">第 23 课</a>的 <span class="inline">Executor</span>），阶段之间用 <span class="inline">new_group</span> 分隔，出错时也能定位是"排题"还是"写题"出的问题。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ to_evaluation_dataset() 丢掉了什么</div>
+      <div class="a">它只取每个样本的 <span class="mono">eval_sample</span>（真正用于评测的问 / 答 / 上下文），把 <span class="mono">synthesizer_name</span> 这类"出题元信息"留在 Testset 里。评测只关心问答本身，元信息用于分析来源分布。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  端到端入口在 <span class="mono">testset/synthesizers/generate.py</span>：<span class="mono">TestsetGenerator</span>（<span class="mono">from_langchain</span> / <span class="mono">from_llama_index</span>、<span class="mono">generate_with_langchain_docs</span>、<span class="mono">generate</span>），
+  内部用 <span class="mono">Executor</span> + <span class="mono">new_group("Scenario Generation")</span> / <span class="mono">new_group("Sample Generation")</span>；份额计算 <span class="mono">calculate_split_values</span> 在 <span class="mono">synthesizers/utils.py</span>。
+  数据模型在 <span class="mono">synthesizers/testset_schema.py</span>：<span class="mono">TestsetSample</span>、<span class="mono">Testset</span>（<span class="mono">to_evaluation_dataset</span> / <span class="mono">from_annotated</span>）。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>端到端并发 + 分阶段追踪</strong>：用 <span class="inline">Executor</span> 吃满并发，<span class="inline">new_group</span> 把"场景 / 样本"两阶段拆开，进度与成本一目了然。</li>
+    <li><strong>Testset → EvaluationDataset 无缝衔接</strong>：一个 <span class="inline">to_evaluation_dataset()</span> 把测试生成线接回评测线，两条主线在此合龙。</li>
+    <li><strong>留人工复核的口子</strong>：<span class="inline">from_annotated</span> 支持"机器出题 + 人工审核挑 approved"，自动化与质量把关兼得。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>一行 <span class="inline">generate_with_langchain_docs</span> 背后是<strong>整条流水线</strong>：transforms → KG → persona → scenario → sample → Testset。</li>
+    <li><span class="inline">generate()</span> 用两个 <span class="inline">Executor</span> 阶段（<strong>Scenario / Sample</strong>）并发出题。</li>
+    <li>产物 <span class="inline">Testset</span> 一步 <span class="inline">to_evaluation_dataset()</span> 即可<strong>直接评测</strong>，两条主线在此闭环。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="29-synthesizers.html"><div class="dir">← 上一课</div><div class="ttl">Synthesizers</div></a><a class="next" href="31-experiments-deep.html"><div class="dir">下一课 →</div><div class="ttl">实验系统深入</div></a></div>
 </div>

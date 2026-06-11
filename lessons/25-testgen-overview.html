@@ -267,9 +267,81 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>为什么自动造测试集</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+评测需要数据，可很多团队卡在第一步：<strong>手里只有一堆文档，却没有一份像样的测试集</strong>。
+ragas 的<strong>第二大支柱</strong>就是把"造测试集"自动化——读完你的文档，自动产出一套覆盖面广、贴近真实提问的问答对，
+再喂回评测线。本部分（25–30 课）就来拆解这条<strong>测试生成流水线</strong>。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  与其让老师<strong>临时人肉出几道题</strong>——出得少、还容易只考自己熟的章节，不如让机器<strong>读完整本教材</strong>，
+  自动出一套<strong>覆盖全书、难度分布合理的卷子</strong>：既有"翻一页就能答"的单点题，也有"要串好几章才能答"的综合题。
+  ragas 的测试生成做的正是这件事。
+</div>
+
+<h2>手写测试集的三宗罪</h2>
+<p>真要给 RAG / LLM 应用做评测，第一道坎往往不是指标，而是<strong>"拿什么数据来评"</strong>。纯手写测试集有几个绕不开的麻烦：</p>
+
+<table class="t">
+  <tr><th>痛点</th><th>手写测试集</th><th>自动生成的做法</th></tr>
+  <tr><td><strong>数量少</strong></td><td>一条条人肉编，几十条就累瘫</td><td>一次调用产出成百上千条</td></tr>
+  <tr><td><strong>有偏差</strong></td><td>只想得到自己熟悉的问法</td><td>用 <span class="mono">persona</span> × 风格 × 长度撑开多样性</td></tr>
+  <tr><td><strong>覆盖窄</strong></td><td>容易漏掉跨章节的综合题</td><td>用知识图谱找出<strong>能跨节点</strong>的多跳组合</td></tr>
+  <tr><td><strong>难复现</strong></td><td>换个人重写，分布又变了</td><td>固定<strong>文档 + 流水线</strong>，可重跑可版本化</td></tr>
+</table>
+
+<h2>端到端流水线：从文档到测试集</h2>
+<p>ragas 把"造测试集"拆成一条<strong>可复现的流水线</strong>，核心思路是先把文档变成一张<strong>知识图谱</strong>，再在图上"出题"：</p>
+<ol>
+  <li><strong>文档 → 节点</strong>：每篇文档先变成一个 <span class="inline">Node</span>（类型 <span class="mono">DOCUMENT</span>）。</li>
+  <li><strong>Transforms 加工 → 知识图谱</strong>：切块、抽摘要 / 关键词 / 实体、按相似度连边，得到 <span class="inline">KnowledgeGraph</span>（<a href="26-knowledge-graph.html">第 26 课</a>、<a href="27-transforms.html">第 27 课</a>）。</li>
+  <li><strong>生成 persona</strong>：从图谱里自动产出几个"虚拟提问者"（<a href="28-persona-scenario.html">第 28 课</a>）。</li>
+  <li><strong>生成 scenario</strong>：按题型配比，组合出"用哪些节点、谁来问、什么风格 / 长度"的场景（<a href="29-synthesizers.html">第 29 课</a>）。</li>
+  <li><strong>生成 sample</strong>：每个场景交给 synthesizer，产出一条问答样本。</li>
+  <li><strong>汇总成 Testset</strong>：打包为 <span class="inline">Testset</span>，再用 <span class="mono">to_evaluation_dataset()</span> 回到评测线（<a href="30-testset-generator.html">第 30 课</a>）。</li>
+</ol>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 这条线和"评测线"是什么关系？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 两条主线如何接上</div>
+      <div class="a"><a href="02-architecture.html">第 2 课</a>讲过 ragas 有<strong>两条主线</strong>：评测线（已有数据 → 打分）和测试生成线（只有文档 → 造数据）。
+        测试生成线的终点 <span class="inline">Testset</span> 有个 <span class="mono">to_evaluation_dataset()</span>，产物正好是评测线的入口 <span class="inline">EvaluationDataset</span>，于是两条线无缝衔接。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 为什么要先建图，而不是直接问 LLM 出题</div>
+      <div class="a">直接让 LLM"看一篇文档出几道题"只能出<strong>单篇范围</strong>的题；而把文档建成图、再找"能跨多个节点的组合"，才能稳定地造出<strong>多跳综合题</strong>，覆盖更接近真实用户的复杂提问。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  测试生成子包在 <span class="mono">src/ragas/testset/</span>。对外门面在 <span class="mono">testset/__init__.py</span>，只导出三样：
+  <span class="mono">TestsetGenerator</span>、<span class="mono">Testset</span>、<span class="mono">TestsetSample</span>。
+  端到端入口是 <span class="mono">testset/synthesizers/generate.py</span> 里的 <span class="mono">TestsetGenerator</span>，
+  最常用方法 <span class="mono">generate_with_langchain_docs(documents, testset_size)</span> 内部再调 <span class="mono">generate()</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>把"造测试集"做成可复现流水线</strong>：从文档到 Testset 每一步都是代码，可重跑、可版本化，而不是一次性的人肉劳动。</li>
+    <li><strong>从真实文档生成 → 贴近生产分布</strong>：题目来自你自己的资料，问法和难度更接近真实用户，评测结论才有参考价值。</li>
+    <li><strong>与评测线无缝衔接</strong>：产物 <span class="inline">Testset</span> 一步转成 <span class="inline">EvaluationDataset</span>，直接喂给 <span class="inline">evaluate</span> / <span class="inline">@experiment</span>。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>测试生成是 ragas 的<strong>第二大支柱</strong>：从文档自动造出覆盖面广、贴近真实的问答测试集。</li>
+    <li>记住流水线骨架：<strong>文档 → 知识图谱 → persona → scenario → sample → Testset</strong>。</li>
+    <li>本课只搭整体心智图，后面 26–30 课逐一拆解每个零件（细节都在那里）。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="24-callbacks-cost-cache.html"><div class="dir">← 上一课</div><div class="ttl">Callbacks · 成本 · 缓存</div></a><a class="next" href="26-knowledge-graph.html"><div class="dir">下一课 →</div><div class="ttl">知识图谱</div></a></div>
 </div>
