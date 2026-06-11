@@ -377,8 +377,8 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
   <ol class="opts">
     <li>因为顺序执行会导致结果无法 <code>save</code> 落盘</li>
     <li>每行评测都是独立的 IO 密集调用（等 LLM / 检索），并发能榨干等待时间、谁先完成先收谁</li>
-    <li>因为 <code>asyncio</code> 是唯一能写文件的方式</li>
-    <li>因为 <code>as_completed</code> 能让评测过程不调用 LLM</li>
+    <li>因为 <code>asyncio.as_completed</code> 能保证按输入顺序返回结果</li>
+    <li>因为 <code>as_completed</code> 会自动跳过出错的行，让评测更稳</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>

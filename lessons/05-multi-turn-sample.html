@@ -351,10 +351,10 @@ print(sample.pretty_repr())   <span class="cm"># 打印成可读的多轮对话<
 <div class="quiz">
   <div class="qn">1. 为什么 <code>MultiTurnSample</code> 把消息顺序校验放在 <code>field_validator</code>（构造对象时执行）里？</div>
   <ol class="opts">
-    <li>为了把错误推迟到评测中途才暴露</li>
+    <li>为了在构造对象时自动调整错乱的消息顺序，省去手工整理</li>
     <li>让「工具结果凭空出现」「对话顺序错乱」等问题在造样本阶段就报错，错误前移、定位更快</li>
     <li>为了加快评测的执行速度</li>
-    <li>因为 pydantic 不允许其他写法</li>
+    <li>因为 <code>field_validator</code> 是唯一能在评测中途动态插入检查的钩子</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>

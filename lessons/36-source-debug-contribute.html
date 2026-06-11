@@ -368,8 +368,8 @@ make run-ci                 <span class="cm"># 提 PR 前本地复刻一遍 CI</
   <ol class="opts">
     <li>因为这样才能测出底层 LLM 的真实质量</li>
     <li>让指标测试确定、可复现且零成本——不受网络 / 计费 / 随机性影响，CI 才能稳定红绿</li>
-    <li>因为真实 LLM 在测试里无法被 import</li>
-    <li>因为 <code>fake_llm</code> 打分比真 LLM 更准</li>
+    <li>因为真实 LLM 的输出无法写进断言，pytest 没法判断对错</li>
+    <li>因为 fake fixtures 能顺便测出指标在真实场景下的准确率</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
@@ -380,7 +380,7 @@ make run-ci                 <span class="cm"># 提 PR 前本地复刻一遍 CI</
   <div class="qn">2. 项目把 <code>make format</code> / <code>type</code> / <code>test</code> / <code>run-ci</code> 一键化，意图是什么？</div>
   <ol class="opts">
     <li>因为 <code>uv</code> 没法直接跑 <code>pytest</code></li>
-    <li>为了让常用命令更难记住</li>
+    <li>为了让本地和 CI 各跑一套不同的流程，互不干扰</li>
     <li>统一开发动作、降低贡献门槛，本地与 CI 跑同一套流程，减少「我这能过、你那挂」</li>
     <li>因为只有 Makefile 才能安装依赖</li>
   </ol>

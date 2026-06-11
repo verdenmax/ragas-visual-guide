@@ -50,9 +50,9 @@ QUIZZES = {
             {
                 "q": "为什么说「我觉得还行」（vibe check）式的判断需要被 ragas 取代？",
                 "opts": [
-                    "因为人读不懂模型的输出",
+                    "因为 vibe check 必须先攒够大量人工标注才能给出结论，太重了",
                     "因为主观判断不可量化、不可复现，换个人或换一天结论就变",
-                    "因为 LLM 的输出总是错的",
+                    "因为 LLM 没办法评价自己生成的内容，只能靠人工",
                     "因为这样能显著省钱",
                 ],
                 "answer": 1,
@@ -68,10 +68,10 @@ QUIZZES = {
             {
                 "q": "为什么 <code>ragas/__init__.py</code> 的 <code>__all__</code> 刻意不把成百上千个具名指标、各种 LLM / Embedding 包装类塞进顶层？",
                 "opts": [
-                    "因为这些类还没写完",
+                    "因为这些具名指标都是运行时动态生成的，没有固定类定义可登记",
                     "因为公开面越小越稳，能降低耦合、减少升级时的破坏性变更",
-                    "因为具名指标在技术上无法被 import",
-                    "因为顶层只能放函数、不能放类",
+                    "因为登记进顶层的名字会被锁定，用户无法再自定义同名指标",
+                    "因为 <code>__all__</code> 最多只能登记几十个名字，装不下成百上千个指标",
                 ],
                 "answer": 1,
                 "why": "顶层只放「人人都要用」的门面（入口 + 数据模型），庞杂实现关进子包，按需从 <code>ragas.metrics</code> / <code>ragas.llms</code> 等子模块导入。公开面越小，升级时越不容易误伤用户代码。",
@@ -79,9 +79,9 @@ QUIZZES = {
             {
                 "q": "<code>ragas.experimental</code> 用模块级 <code>__getattr__</code> 惰性加载，主要好处是什么？",
                 "opts": [
-                    "让导入速度变慢，方便插断点调试",
+                    "为了每次访问时都重新加载实验模块，确保拿到最新代码",
                     "没装可选依赖时 import ragas 本身不报错，真用到才触发导入并提示安装",
-                    "让 experimental 永远不可用",
+                    "为了把实验功能限制为仅供 ragas 内部测试使用",
                     "强制所有用户都装上实验依赖",
                 ],
                 "answer": 1,
@@ -94,10 +94,10 @@ QUIZZES = {
             {
                 "q": "评测中单个任务抛错时，引擎默认把该结果转成 <code>np.nan</code> 而不是直接崩溃。这样设计是为了什么？",
                 "opts": [
-                    "为了让最终分数更高",
+                    "为了让出错的行用全局均值自动填补，保持样本量不变",
                     "为了让个别失败行不中断整轮评测，且均值用 <code>safe_nanmean</code> 自动忽略它",
                     "为了节省 token",
-                    "因为 LLM 调用不支持抛异常",
+                    "因为 <code>np.nan</code> 会触发 ragas 自动换一个备用 LLM 重算该行",
                 ],
                 "answer": 1,
                 "why": "默认 <code>raise_exceptions=False</code>，单行失败记 <code>np.nan</code>；汇总时 <code>safe_nanmean</code> 会忽略 <code>NaN</code>，所以个别失败行不会拖垮整批，也不会污染均值。",
@@ -122,9 +122,9 @@ QUIZZES = {
             {
                 "q": "为什么 <code>SingleTurnSample</code> 的字段几乎全是 <code>Optional</code>（默认 <code>None</code>）？",
                 "opts": [
-                    "因为 pydantic 不支持必填字段",
+                    "因为不同指标会动态往样本里增删字段，必须全设成可选",
                     "为了用一个模型适配不同指标——缺哪栏就空着，按需带列",
-                    "因为这些字段其实都没用",
+                    "因为缺失的字段会在评测时由 LLM 自动补全，所以可以先留空",
                     "纯粹为了减少内存占用",
                 ],
                 "answer": 1,
@@ -148,9 +148,9 @@ QUIZZES = {
             {
                 "q": "为什么 <code>MultiTurnSample</code> 把消息顺序校验放在 <code>field_validator</code>（构造对象时执行）里？",
                 "opts": [
-                    "为了把错误推迟到评测中途才暴露",
+                    "为了在构造对象时自动调整错乱的消息顺序，省去手工整理",
                     "让「工具结果凭空出现」「对话顺序错乱」等问题在造样本阶段就报错，错误前移、定位更快",
-                    "因为 pydantic 不允许其他写法",
+                    "因为 <code>field_validator</code> 是唯一能在评测中途动态插入检查的钩子",
                     "为了加快评测的执行速度",
                 ],
                 "answer": 1,
@@ -174,10 +174,10 @@ QUIZZES = {
             {
                 "q": "为什么 <code>DataTable</code> 设计成泛型基类，被 <code>Dataset</code> 与 <code>Experiment</code> 共用？",
                 "opts": [
-                    "为了让两者的存取算法各不相同",
+                    "让 <code>Dataset</code> 与 <code>Experiment</code> 各自实现一套独立的存取逻辑、互不影响",
                     "让 <code>load</code> / <code>save</code> / <code>_resolve_backend</code> 只写一遍，靠 <code>DATATABLE_TYPE</code> 区分身份（DRY）",
-                    "因为 Python 要求所有类都继承泛型",
-                    "为了让 <code>Experiment</code> 不能存盘",
+                    "靠泛型的类型参数在运行时区分 <code>Dataset</code> 与 <code>Experiment</code> 的身份，省掉 <code>DATATABLE_TYPE</code> 类属性",
+                    "让 <code>Experiment</code> 自动继承 <code>EvaluationDataset</code> 的 <code>to_csv</code> / <code>to_jsonl</code> 转换器，免去自己实现持久化",
                 ],
                 "answer": 1,
                 "why": "<code>DataTable</code> 把存取逻辑收敛到一处，<code>Dataset</code> 与 <code>Experiment</code> 复用，靠类属性 <code>DATATABLE_TYPE</code>（<code>'Dataset'</code> / <code>'Experiment'</code>）区分身份，无需各写一套。",
@@ -185,10 +185,10 @@ QUIZZES = {
             {
                 "q": "为什么存储型数据集允许用字符串 <code>'local/csv'</code> 指定 backend，而不是直接 import 后端类？",
                 "opts": [
-                    "因为传字符串比传类运行得更快",
+                    "因为字符串能让多个数据集共享同一个全局后端单例，省去重复实例化",
                     "用户无需 import 具体类，新后端注册进 registry 即可被字符串引用——插件式扩展，报错时还顺带列出可用项",
-                    "因为后端类在技术上无法被 import",
-                    "为了隐藏后端实现、使其不可用",
+                    "因为 <code>_resolve_backend</code> 会把字符串当成文件路径直接定位读写，跳过注册表查找",
+                    "因为字符串在运行时解析，能按环境变量自动切到不同后端，传类则做不到",
                 ],
                 "answer": 1,
                 "why": "<code>_resolve_backend</code> 拿字符串去全局 registry 查类再实例化；查不到就列出可用后端清单。用户只写 <code>'local/csv'</code>，新后端注册即可引用，插件式可扩展、报错友好。",
@@ -206,7 +206,7 @@ QUIZZES = {
                     "直接报错，要求必须显式传入 LLM",
                     "自动建一个默认裁判 <code>llm_factory('gpt-4o-mini')</code>，让最小例子开箱即跑",
                     "跳过该指标、不打分",
-                    "随机挑一个本地模型来打分",
+                    "自动降级用一个轻量的本地规则裁判，完全不产生 API 费用",
                 ],
                 "answer": 1,
                 "why": "缺裁判时自动兜底建 <code>gpt-4o-mini</code>（embeddings 同理走 <code>embedding_factory</code>），最小例子无需手动配模型即可跑（仍需设 <code>OPENAI_API_KEY</code>），也可在 metric 级覆盖。",
@@ -214,7 +214,7 @@ QUIZZES = {
             {
                 "q": "为什么 <code>result.total_cost()</code> / <code>total_tokens()</code> 需要在调用 <code>evaluate</code> 时传 <code>token_usage_parser</code> 才能用？",
                 "opts": [
-                    "因为成本是随机生成的",
+                    "因为统计 token 会拖慢评测，ragas 默认关闭、传了 parser 才开启",
                     "因为不同 LLM 回包里 token 用量的格式不一，需要 parser 告诉 ragas 怎么解析，否则它无从统计",
                     "因为 <code>total_cost</code> 已被废弃",
                 ],
@@ -228,9 +228,9 @@ QUIZZES = {
             {
                 "q": "<code>@experiment</code> 的 <code>arun</code> 跑完后会自动把每行结果存进 backend，这体现了什么设计理念？",
                 "opts": [
-                    "为了尽量占满磁盘空间",
+                    "为了让每次实验都覆盖上一次的结果，只保留最新版",
                     "experiments-first：每次改动都留下可对比的记录，便于一版版迭代回看",
-                    "为了让结果无法被读取",
+                    "为了在内存里缓存结果，加快下一次相同实验的速度",
                     "因为不存盘就没法并发执行",
                 ],
                 "answer": 1,
@@ -241,7 +241,7 @@ QUIZZES = {
                 "opts": [
                     "自动把代码部署到生产环境",
                     "把每个实验钉在确切的代码快照上，随时回溯「这次实验对应哪段代码」",
-                    "删除所有未提交的改动",
+                    "把实验结果同步上传到远程 git 仓库做备份",
                     "加快实验的运行速度",
                 ],
                 "answer": 1,
@@ -270,8 +270,8 @@ QUIZZES = {
                 "opts": [
                     "立刻删除旧路径，逼用户马上重写",
                     "用模块级 <code>__getattr__</code> 做平滑过渡：旧路径暂时可用、同时提示迁移到 collections，到 v1.0 再移除",
-                    "让 Faithfulness 算出的分数变低",
-                    "彻底禁止任何人使用 Faithfulness",
+                    "让从旧路径导入的 Faithfulness 自动切换成 collections 的新实现",
+                    "在 import 时就抛出 <code>ImportError</code>，强制用户立刻改用新路径",
                 ],
                 "answer": 1,
                 "why": "<code>ragas/metrics/__init__.py</code> 把具名指标放进 <code>_DEPRECATED_METRICS</code>，由模块级 <code>__getattr__</code> 拦截、发告警后仍返回实现；算法与分数口径不变，只是提示改导入路径，实现平滑迁移。",
@@ -285,7 +285,7 @@ QUIZZES = {
                 "opts": [
                     "因为它要把「从回答反推出的问题」与原问题算余弦相似度",
                     "因为它根本不需要 LLM",
-                    "因为 embeddings 只是用来让它跑得更快",
+                    "因为它要先把检索到的上下文向量化，再判断是否相关",
                     "因为它要去检索新的上下文",
                 ],
                 "answer": 0,
@@ -294,10 +294,10 @@ QUIZZES = {
             {
                 "q": "RAG 四件套为什么要分成「两个查检索质量、两个查生成质量」？",
                 "opts": [
-                    "因为四个指标的算法其实完全相同",
+                    "因为检索质量与生成质量本质是同一回事，分开只是表述习惯",
                     "RAG 同时依赖检索与生成两端，分开各盯一段，才能定位问题出在检索还是生成",
                     "因为检索和生成必须用不同的 LLM",
-                    "纯粹是为了凑成四个指标",
+                    "因为四个指标必须成套使用，缺一个就无法出分",
                 ],
                 "answer": 1,
                 "why": "ContextPrecision / ContextRecall 查检索质量，Faithfulness / AnswerRelevancy 查生成质量；两端分别体检，才能判断 RAG 是「检索没找对」还是「答案跑偏」。",
@@ -313,7 +313,7 @@ QUIZZES = {
                 "q": "<code>DiscreteMetric</code> 在 <code>__post_init__</code> 里用 <code>Literal[...]</code> 自动生成一个 pydantic 响应模型，这样设计的核心目的是什么？",
                 "opts": [
                     "为了让指标跑得更快、少花 token",
-                    "因为 pydantic 不支持普通字符串字段",
+                    "因为只有 <code>Literal[...]</code> 才允许 LLM 在 <code>allowed_values</code> 之外补充新取值",
                     "把 LLM 输出从源头卡死在 <code>allowed_values</code> 之内，省掉事后解析与兜底",
                     "为了让指标自动支持多轮对话",
                 ],
@@ -343,7 +343,7 @@ QUIZZES = {
                 "opts": [
                     "因为它们比 LLM 指标更懂语义",
                     "因为它们确定、零 token、毫秒级：同样输入永远同样输出",
-                    "因为它们能顺便自动生成测试集",
+                    "因为它们会根据历史结果自我校准，越跑越准",
                     "因为它们必须联网调用 API 才更准",
                 ],
                 "answer": 1,
@@ -368,7 +368,7 @@ QUIZZES = {
                 "q": "为什么 collections 的 <code>BaseMetric</code> 在构造时（<code>_validate_llm</code>）就拒收 langchain 包装的 LLM、只认 <code>InstructorBaseRagasLLM</code>？",
                 "opts": [
                     "把错误前移到构造期：传错模型当场 <code>ValueError</code>，而不是评测跑到一半才炸",
-                    "因为 langchain 的模型质量更差",
+                    "因为 langchain 包装的 LLM 只有同步接口，无法支持异步打分",
                     "因为构造时校验能让打分本身更快",
                     "因为 <code>InstructorBaseRagasLLM</code> 不需要 API key",
                 ],
@@ -393,10 +393,10 @@ QUIZZES = {
             {
                 "q": "<code>MetricResult</code> 重载 <code>__float__</code> / <code>__add__</code> / <code>__gt__</code> 等运算符，主要为了什么？",
                 "opts": [
-                    "为了让它占用更少内存",
+                    "为了让它能用 <code>==</code> 直接比较两个结果的 reason 文本是否一致",
                     "让它无需先 <code>.value</code> 解包就能直接当数字参与运算 / 比较 / <code>sum()</code>，无侵入替换裸数字",
-                    "为了禁止它和裸数字做比较",
-                    "为了在序列化时丢掉 reason 字段",
+                    "为了禁止它参与浮点运算，强制开发者先手动 <code>.value</code> 解包",
+                    "为了在序列化时把 <code>value</code> 和 <code>reason</code> 合并成一个字符串",
                 ],
                 "answer": 1,
                 "why": "靠运算符重载，已有按 <code>float</code> 写的聚合代码几乎不改就能接收 <code>MetricResult</code>——它能直接算、比大小、被 <code>sum()</code>，而 reason 始终不丢。",
@@ -405,8 +405,8 @@ QUIZZES = {
                 "q": "为什么 <code>MetricResult</code> 既带 <code>value</code> 又带 <code>reason</code>，而不是只返回一个分数？",
                 "opts": [
                     "为了可解释：既能统计（数值），又能复盘为什么得这个分（评语）",
-                    "因为 pydantic 强制每个模型至少要有两个字段",
-                    "因为 reason 是用来加速运算的",
+                    "因为 reason 是给 <code>safe_nanmean</code> 标记缺失值用的",
+                    "因为 reason 会作为下一次调用的缓存 key",
                     "因为 value 单独存在时无法序列化",
                 ],
                 "answer": 0,
@@ -420,7 +420,7 @@ QUIZZES = {
                 "q": "Faithfulness 为什么先把答案拆成「原子陈述」再逐句做 NLI，而不是对整段笼统打分？",
                 "opts": [
                     "因为整段打分会消耗更多 token",
-                    "因为 LLM 读不懂较长的文本",
+                    "因为 LLM 一次只能对一个句子做蕴含判断，无法整段处理",
                     "因为拆句之后就不再需要检索资料",
                     "逐句查证更精确，还天然产出可读的逐句 <code>reason</code>",
                 ],
@@ -476,7 +476,7 @@ QUIZZES = {
                 "opts": [
                     "因为反向生成不需要 embeddings",
                     "把主观的「切不切题」转成可计算的相似度：真切题，反推出的问题就与原问题语义相近",
-                    "因为 LLM 读不懂原始问题",
+                    "因为直接问「切题吗」只能得到是 / 否，无法给出 0–1 的连续分",
                     "因为这样就可以完全不调用 LLM",
                 ],
                 "answer": 1,
@@ -500,9 +500,9 @@ QUIZZES = {
             {
                 "q": "为什么 <code>ToolCallAccuracy</code> / <code>ToolCallF1</code> 用纯规则比对，而不请 LLM 当裁判？",
                 "opts": [
-                    "因为 LLM 看不懂工具调用",
+                    "因为工具调用的正确与否带有语义模糊，必须靠规则消除歧义",
                     "因为规则比对虽更慢但更准",
-                    "因为工具调用一定不带参数",
+                    "因为工具调用的参数都是自由文本，只有规则能逐字符比对",
                     "工具调用是结构化的（名字 + 参数），对不对可直接比对——纯规则零 token、确定可复现",
                 ],
                 "answer": 3,
@@ -532,7 +532,7 @@ QUIZZES = {
                     "为了让 prompt 更短、省 token",
                     "把「答题格式」变成机器可校验的强约束，而不是口头叮嘱",
                     "为了让输出可以是任意自由文本",
-                    "因为 LLM 只接受 JSON schema 当输入",
+                    "因为 <code>model_json_schema()</code> 会把 few-shot 例题也一并编码进去",
                 ],
                 "answer": 1,
                 "why": "用 <code>output_model</code> 的 JSON schema 当输出签名，等于把格式要求写成机器可校验的强约束；再配 <code>RagasOutputParser</code> 校验、<code>FixOutputFormat</code> 在坏 JSON 时退回重填，鲁棒性藏在解析器里。",
@@ -568,7 +568,7 @@ QUIZZES = {
                 "opts": [
                     "因为翻译会随机丢例题，必须事后补齐",
                     "保证 few-shot 例题结构不变、一一对应，只换语言而不重写 prompt",
-                    "因为 LLM 一次只能翻译固定条数",
+                    "因为只有条数一致，<code>adapt</code> 才能原地修改 prompt 而不新建对象",
                     "因为条数变了 prompt 就无法序列化",
                 ],
                 "answer": 1,
@@ -584,10 +584,10 @@ QUIZZES = {
             {
                 "q": "现代 instructor 路径让 LLM「直接产出 pydantic 对象」，相比经典 langchain wrapper 好在哪？",
                 "opts": [
-                    "因为用了 instructor，LLM 就不会再出错",
-                    "因为 pydantic 对象天生比字符串更省 token",
+                    "因为 instructor 会缓存每次结构化输出，相同输入直接复用",
+                    "因为 pydantic 对象在网络传输时比 JSON 字符串更紧凑、更省带宽",
                     "LLM 输出被直接校验成 pydantic 对象，省掉手写 JSON 解析，格式约束与重试都交给 instructor 兜底",
-                    "因为 instructor 能让 LLM 不再需要 prompt",
+                    "因为 instructor 会在 LLM 出错时自动切换到另一个模型重试",
                 ],
                 "answer": 2,
                 "why": "经典路径要自己拼 prompt、再手写解析 + 重试；现代 instructor 路径给 client 打补丁，让 LLM 直接吐出校验过的 pydantic 对象，解析与重试由库兜底——是一处实打实的减法。",
@@ -597,8 +597,8 @@ QUIZZES = {
                 "opts": [
                     "client 可选，adapter 才是必填项",
                     "client 必填，因为 instructor 要给真实 client 打补丁，传 None 直接 <code>ValueError</code>；adapter='auto' 则按 client 自动挑适配器，省去手填",
-                    "两个参数都是摆设，工厂内部会忽略它们",
-                    "client 用来选语言，adapter 用来计费",
+                    "client 只用于鉴权，真正发起调用的是 adapter",
+                    "adapter 必须和 client 来自同一个第三方库，否则报错",
                 ],
                 "answer": 1,
                 "why": "没有具体 client，instructor 无从打补丁，所以 client 缺失即 <code>ValueError</code>；adapter 默认 'auto' 让它按 client 自动选适配器，常见场景一行就够——必填的是「真用得上的」，能猜的就给默认。",
@@ -639,7 +639,7 @@ QUIZZES = {
             {
                 "q": "<code>Executor</code> 为什么要用 <code>wrap_callable_with_index</code> 给每个任务带上原始索引？",
                 "opts": [
-                    "因为索引是用来计费的",
+                    "因为索引被当作缓存 key，用来命中上次相同任务的结果",
                     "并发完成的顺序是乱的，带上原始索引，收集后才能按输入顺序还原，保证结果保序",
                     "因为 tenacity 重试必须靠索引",
                     "因为索引决定任务的执行优先级",
@@ -650,8 +650,8 @@ QUIZZES = {
             {
                 "q": "单个任务抛错时，为什么默认（<code>raise_exceptions=False</code>）把它转成 <code>np.nan</code> 而不是让整轮崩掉？",
                 "opts": [
-                    "因为 <code>np.nan</code> 比异常更省内存",
-                    "因为 LLM 抛的错根本无法被捕获",
+                    "因为把失败行记成 <code>np.nan</code> 相当于给它打 0 分，对均值最保守",
+                    "因为异常对象无法被 <code>Executor</code> 的结果列表收集，只能用 <code>np.nan</code> 占位",
                     "因为这样能自动重跑所有失败任务",
                     "一行出错就废掉整批评测代价太大；转成 <code>np.nan</code> 让该行缺测、其余结果照常产出，整轮更稳健",
                 ],
@@ -666,9 +666,9 @@ QUIZZES = {
                 "q": "<code>cacher</code> + <code>DiskCacheBackend</code> 为什么用「调用内容的 sha256 哈希」当缓存 key？",
                 "opts": [
                     "相同输入必得相同哈希、不同输入极难碰撞，用内容指纹当 key 才能精准复用上次的 LLM / embedding 结果",
-                    "因为 sha256 串比函数名更短",
+                    "因为 sha256 不可逆，能防止别人从缓存里还原出 prompt 内容",
                     "因为时间戳总在变，所以改用哈希",
-                    "因为哈希顺带能加密你的 API key",
+                    "因为哈希值定长，能让缓存文件大小固定、便于管理",
                 ],
                 "answer": 0,
                 "why": "以「调用内容的 sha256」为 key：同样的输入 → 同样的 key → 直接命中缓存，省掉重复的 LLM / embedding 花费；哈希只是内容指纹，与加密、计费无关。",
@@ -677,9 +677,9 @@ QUIZZES = {
                 "q": "<code>new_group</code> / <code>RagasTracer</code> 把一次评测组织成「run 树」，主要图什么？",
                 "opts": [
                     "因为树结构能让评测整体跑得更快",
-                    "因为只有树结构才支持并发",
+                    "因为只有组织成树，<code>CostCallbackHandler</code> 才能聚合 token 与成本",
                     "把 评测 → 每行 → 每个指标 的调用嵌套成 trace 树，方便回看每一步、定位是哪行哪个指标出了问题",
-                    "因为这样评测就可以完全不调用 LLM",
+                    "因为 trace 树会自动把失败的调用重跑一遍",
                 ],
                 "answer": 2,
                 "why": "<code>new_group</code> 开运行分组，<code>RagasTracer</code> 把一轮记成 EVALUATION → ROW → METRIC 的 trace 树；<code>CostCallbackHandler</code> 再顺手聚合 token / 成本。可观测性是为了「出问题能顺树查到底」，不是提速。",
@@ -694,10 +694,10 @@ QUIZZES = {
             {
                 "q": "为什么要「自动造测试集」，而不是全靠人手写？",
                 "opts": [
-                    "因为手写的测试集一定带语法错误",
+                    "因为只有自动生成的题目才能附带标准答案（reference），手写的不行",
                     "手写测试集往往量少、覆盖偏、还慢；自动生成能放量、铺开覆盖面，而且整条管道可复现",
                     "因为自动生成完全不需要任何文档",
-                    "因为手写的测试集没法喂给 LLM 应用",
+                    "因为手写测试集的格式无法被 <code>EvaluationDataset</code> 接收",
                 ],
                 "answer": 1,
                 "why": "手写测试集的三宗罪是少 / 偏 / 慢；测试生成线用文档自动造数据，量能上去、覆盖更全，且可复现——这正是它存在的理由。",
@@ -706,9 +706,9 @@ QUIZZES = {
                 "q": "测试生成被拆成 docs → KnowledgeGraph → personas → scenarios → samples → Testset 这样的分阶段管道，好在哪？",
                 "opts": [
                     "因为阶段拆得越多整体跑得越快",
-                    "因为只有分阶段才能不依赖任何文档",
+                    "因为分阶段后，知识图谱那一步就不再需要源文档",
                     "每步职责单一、产物可检查可复现，既贴近真实使用，又便于单独调试某一阶段",
-                    "因为分阶段就能免去所有 LLM 调用",
+                    "因为中间产物都能缓存，重跑时整条管道都不必再调用 LLM",
                 ],
                 "answer": 2,
                 "why": "把造数据拆成「建图 → 生成 persona → 编排 scenario → 落成 sample → 打包 Testset」，每一步都有可检查的中间产物，定位问题、替换某一阶段都更容易。",
@@ -723,9 +723,9 @@ QUIZZES = {
             {
                 "q": "<code>KnowledgeGraph</code> 为什么要建成「节点 + 关系（边）」的图，而不是一个扁平文档列表？",
                 "opts": [
-                    "因为图天生比列表更省内存",
-                    "因为扁平列表存不下文本",
-                    "因为图结构可以不调用 LLM",
+                    "因为图会按相似度自动合并重复节点，扁平列表则会塞满冗余文档",
+                    "因为图天然支持按节点类型（DOCUMENT / CHUNK）建索引，查询比扁平列表快得多",
+                    "因为只有挂在图节点上的文本才能被切块（chunk），列表里的文档无法切分",
                     "图能显式记录节点之间的关联，后续才能沿边做跨节点（多跳）推理出题；扁平列表丢掉了这层关系",
                 ],
                 "answer": 3,
@@ -736,7 +736,7 @@ QUIZZES = {
                 "opts": [
                     "为多跳题备料：先把「能连起来的节点组」找出来，synthesizer 才有跨节点素材出题",
                     "为单跳题挑出唯一的那个节点",
-                    "为了压缩知识图谱的体积",
+                    "为出题前裁掉图里的孤立节点，缩小遍历范围",
                     "为了给重复节点做去重",
                 ],
                 "answer": 0,
@@ -749,10 +749,10 @@ QUIZZES = {
             {
                 "q": "transform 被分成 Extractor / Splitter / RelationshipBuilder / NodeFilter 四类，这种拆分意义何在？",
                 "opts": [
-                    "因为四类正好各对应一家 LLM 厂商",
+                    "因为这四类正好对应知识图谱的四种节点类型",
                     "把建图拆成切块、抽属性、连边、过滤四种单一职责的积木，便于拼装与替换出不同管道",
-                    "因为建图必须正好四步，多一步少一步都不行",
-                    "因为这样建图就能不依赖知识图谱",
+                    "因为这四类必须严格按固定顺序执行，否则建图会出错",
+                    "因为拆成四类后，建图就不再需要调用 LLM",
                 ],
                 "answer": 1,
                 "why": "四类 transform 是四种单一职责的可组合积木；<code>default_transforms</code> 把它们按「切块 → 抽摘要 / 主题 / NER / embedding → 按相似度连边」拼成标准管道，<code>Parallel</code> 还能把同层变换并行分组。",
@@ -787,7 +787,7 @@ QUIZZES = {
                 "q": "<code>BaseScenario</code> = nodes + style（<code>QueryStyle</code>）+ length（<code>QueryLength</code>）+ persona，这样组合的目的是？",
                 "opts": [
                     "因为这四个字段缺一个就无法存盘",
-                    "因为风格和长度是用来计费的",
+                    "因为风格和长度决定了该用哪个合成器出题",
                     "因为这样能减少图里的节点数量",
                     "用「谁问 × 什么风格 × 多长 × 基于哪些节点」的组合撑开测试集多样性，覆盖更多真实提问形态",
                 ],
@@ -801,7 +801,7 @@ QUIZZES = {
             {
                 "q": "出题为什么拆成 <code>generate_scenarios</code> → <code>generate_sample</code> 两步？",
                 "opts": [
-                    "因为一步到位就没法调用 LLM",
+                    "因为一步生成问答会超出 LLM 的上下文窗口，必须拆开",
                     "因为拆成两步比一步更省 token",
                     "先定「考什么场景」，再落成具体样本；两步解耦让场景规划与样本生成各自可控、可复用",
                     "因为 scenario 和 sample 必须来自不同的模型",
@@ -815,7 +815,7 @@ QUIZZES = {
                     "因为合成器太多会导致超时",
                     "多跳合成器需要图里有可连接的节点簇；图谱撑不起时先剔除，免得分了配额却出不出题",
                     "因为单跳合成器从来不会被用到",
-                    "因为过滤掉一些合成器能让最终分数更高",
+                    "因为没有有效簇的合成器会直接抛异常中断整个出题流程",
                 ],
                 "answer": 1,
                 "why": "它按概率给各题型（单跳 <code>SingleHopSpecific</code> vs 多跳 <code>MultiHopAbstract</code> / <code>Specific</code>）配比，但会先检查图能不能撑起该题型，撑不起的合成器直接过滤——避免「分了名额却生不出题」的空转。",
@@ -827,9 +827,9 @@ QUIZZES = {
             {
                 "q": "<code>generate</code> 为什么要复用 <code>Executor</code> + <code>new_group</code> 来「分阶段并发出题」？",
                 "opts": [
-                    "因为 <code>new_group</code> 能让出题过程不调用 LLM",
+                    "因为 <code>new_group</code> 会把多次 LLM 调用合并成一次，省钱",
                     "因为不借助 <code>Executor</code> 就建不出知识图谱",
-                    "因为分阶段纯粹是为了日志好看",
+                    "因为只有分阶段，<code>new_group</code> 才能把出题结果直接存进 backend",
                     "出题是大量独立的 LLM 调用，交给 <code>Executor</code> 并发提速、用 <code>new_group</code> 分阶段记录，直接复用评测线已有的调度与可观测能力",
                 ],
                 "answer": 3,
@@ -857,9 +857,9 @@ QUIZZES = {
                 "q": "<code>@experiment</code> 的 <code>arun</code> 为什么用 <code>asyncio.as_completed</code> 并发跑每一行，而不是顺序逐行评测？",
                 "opts": [
                     "每行评测都是独立的 IO 密集调用（等 LLM / 检索），并发能榨干等待时间、谁先完成先收谁",
-                    "因为 <code>as_completed</code> 能让评测过程不调用 LLM",
+                    "因为 <code>as_completed</code> 会自动跳过出错的行，让评测更稳",
                     "因为顺序执行会导致结果无法 <code>save</code> 落盘",
-                    "因为 <code>asyncio</code> 是唯一能写文件的方式",
+                    "因为 <code>asyncio.as_completed</code> 能保证按输入顺序返回结果",
                 ],
                 "answer": 0,
                 "why": "<code>arun</code> 把每行的「调你的 RAG + 打分」包成协程，用 <code>asyncio.as_completed</code> 并发——这些任务大多在等 LLM / 检索返回，属 IO 密集，并发把等待时间利用起来；顺序跑只会白白空等。",
@@ -885,9 +885,9 @@ QUIZZES = {
             {
                 "q": "ragas 让你用字符串 <code>'local/csv'</code> 选后端，而不是直接 import 具体后端类，好处是什么？",
                 "opts": [
-                    "因为字符串写起来比类名短",
+                    "因为同一个字符串在不同项目里会自动映射到不同的后端实现",
                     "解耦：调用方只依赖一个名字，<code>get_registry</code> 按名查找；换实现 / 加新后端都不必改用户代码",
-                    "因为 import 后端类一定会报错",
+                    "因为后端类的构造参数各家不同，用字符串能屏蔽这些差异、统一调用",
                     "因为 csv 是唯一被支持的后端",
                 ],
                 "answer": 1,
@@ -898,7 +898,7 @@ QUIZZES = {
                 "opts": [
                     "必须先 fork ragas 源码才能加后端",
                     "注册后会覆盖掉所有内置后端",
-                    "一个 entry-point 只能注册一个后端，没别的用处",
+                    "entry-points 注册的后端只能在安装时使用一次，重启后失效",
                     "<code>pip install</code> 带 entry-point 的包后，注册表启动一扫即发现，无需改 ragas 一行即可即插即用",
                 ],
                 "answer": 3,
@@ -912,8 +912,8 @@ QUIZZES = {
                 "q": "<code>MetricWithLLM.train</code> 为什么要从人工标注（<code>MetricAnnotation</code>）里学，而不是凭空优化？",
                 "opts": [
                     "以人类判断为「金标准」对齐：优化指令 + 挑 few-shot 示例，让 LLM 裁判与人类打分的相关性更高",
-                    "因为有了标注就不必再调用 LLM",
-                    "因为没有标注在技术上无法启动训练",
+                    "因为标注能直接微调底层 LLM 的权重，省去 prompt 工程",
+                    "因为没有人工标注，<code>GeneticOptimizer</code> 就无法并行评估候选 prompt",
                     "因为标注只是用来让训练更快收敛",
                 ],
                 "answer": 0,
@@ -922,10 +922,10 @@ QUIZZES = {
             {
                 "q": "<code>train</code> 为什么按指标的 <code>output_type</code> 自动挑损失函数（BINARY→<code>BinaryMetricLoss</code>，连续 / 离散→<code>MSELoss</code>）？",
                 "opts": [
-                    "因为损失函数随便选结果都一样",
-                    "因为 <code>MSELoss</code> 根本不能用于任何指标",
+                    "因为二分类指标的误差天然比连续指标大，必须用更重的 loss 压制",
+                    "因为 <code>MSELoss</code> 只能反向传播梯度，离散指标没有梯度所以要换 loss",
                     "不同输出类型「错得有多离谱」的度量方式不同，选对 loss 才能给优化器正确的方向",
-                    "因为这样能少装一个依赖",
+                    "因为选错 loss 会让 <code>DSPyOptimizer</code> 直接无法启动",
                 ],
                 "answer": 2,
                 "why": "二分类的对 / 错与连续值的偏差，本质是两种误差度量；按 <code>output_type</code> 自动选 loss，<code>GeneticOptimizer</code>（默认）/ <code>DSPyOptimizer</code> 才能拿到合理的适应度信号，把指标往「更像人」推。",
@@ -937,8 +937,8 @@ QUIZZES = {
             {
                 "q": "各框架集成为什么把它依赖的第三方库 import 下沉到各自子模块，而不在 <code>integrations</code> 包顶层统一导入？",
                 "opts": [
-                    "因为 Python 顶层模块里不允许写 import",
-                    "因为这样能让所有集成都跑得更快",
+                    "因为顶层 <code>__init__</code> 里写 import 会和子模块形成循环依赖",
+                    "因为按子模块下沉能让每个集成自动选用各自最新版的依赖",
                     "「按插头分装」：缺某框架的依赖只断那一路集成，不会让整个 <code>integrations</code> 包 import 失败",
                     "因为各框架依赖之间一定会互相覆盖",
                 ],
@@ -966,9 +966,9 @@ QUIZZES = {
             {
                 "q": "把评测过程上报到 Langfuse / MLflow / LangSmith 这类观测平台，主要解决什么问题？",
                 "opts": [
-                    "让评测从此不再需要数据集",
+                    "把评测的打分逻辑外包给观测平台，本地不再计算指标",
                     "让每次评测的每一步可视化、可回溯，便于在生产级大盘上定位薄弱环节",
-                    "让指标分数自动变高",
+                    "自动把多次评测的分数合并成一个综合排行榜",
                     "让评测彻底离线、不留任何记录",
                 ],
                 "answer": 1,
@@ -978,7 +978,7 @@ QUIZZES = {
                 "q": "ragas 同时适配 Langfuse / MLflow / LangSmith / Helicone / Opik 多家观测平台，为什么不锁定一家？",
                 "opts": [
                     "因为每家平台只能上报一种指标",
-                    "因为只有这样评测才能并发执行",
+                    "因为不同平台分别负责上报 token、成本和分数，缺一不可",
                     "团队各有既用的观测栈，多家适配让 ragas 融入现有工具链，而非逼人迁移",
                     "因为这些平台在技术上完全相同",
                 ],
@@ -992,8 +992,8 @@ QUIZZES = {
             {
                 "q": "ragas 的测试为什么大量用 <code>fake_llm</code> / <code>fake_embedding</code> fixture，而不真的调用 LLM？",
                 "opts": [
-                    "因为真实 LLM 在测试里无法被 import",
-                    "因为 <code>fake_llm</code> 打分比真 LLM 更准",
+                    "因为真实 LLM 的输出无法写进断言，pytest 没法判断对错",
+                    "因为 fake fixtures 能顺便测出指标在真实场景下的准确率",
                     "因为这样才能测出底层 LLM 的真实质量",
                     "让指标测试确定、可复现且零成本——不受网络 / 计费 / 随机性影响，CI 才能稳定红绿",
                 ],
@@ -1003,7 +1003,7 @@ QUIZZES = {
             {
                 "q": "项目把 <code>make format</code> / <code>type</code> / <code>test</code> / <code>run-ci</code> 一键化，意图是什么？",
                 "opts": [
-                    "为了让常用命令更难记住",
+                    "为了让本地和 CI 各跑一套不同的流程，互不干扰",
                     "统一开发动作、降低贡献门槛，本地与 CI 跑同一套流程，减少「我这能过、你那挂」",
                     "因为 <code>uv</code> 没法直接跑 <code>pytest</code>",
                     "因为只有 Makefile 才能安装依赖",
@@ -1029,9 +1029,9 @@ QUIZZES = {
             {
                 "q": "CLI 选用 <code>typer</code> + <code>rich</code> 这套组合，主要图什么？",
                 "opts": [
-                    "图它们能让命令行无法显示颜色",
+                    "因为 <code>rich</code> 负责解析命令行参数、<code>typer</code> 负责给输出上色",
                     "<code>typer</code> 靠类型注解声明命令 / 参数省样板，<code>rich</code> 把评测结果渲染成好读的表格——好写又好看",
-                    "图它们可以替代 LLM 来打分",
+                    "因为它们能把评测分数自动上传到观测平台",
                     "因为 <code>sdk.py</code> 必须靠它们才能运行",
                 ],
                 "answer": 1,

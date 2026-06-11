@@ -367,8 +367,8 @@ print(result[<span class="st">"correlation"</span>], result[<span class="st">"ag
   <div class="qn">1. <code>MetricWithLLM.train</code> 为什么要从人工标注（<code>MetricAnnotation</code>）里学，而不是凭空优化？</div>
   <ol class="opts">
     <li>因为标注只是用来让训练更快收敛</li>
-    <li>因为有了标注就不必再调用 LLM</li>
-    <li>因为没有标注在技术上无法启动训练</li>
+    <li>因为标注能直接微调底层 LLM 的权重，省去 prompt 工程</li>
+    <li>因为没有人工标注，<code>GeneticOptimizer</code> 就无法并行评估候选 prompt</li>
     <li>以人类判断为「金标准」对齐：优化指令 + 挑 few-shot 示例，让 LLM 裁判与人类打分的相关性更高</li>
   </ol>
   <details class="accordion">
@@ -379,10 +379,10 @@ print(result[<span class="st">"correlation"</span>], result[<span class="st">"ag
 <div class="quiz">
   <div class="qn">2. <code>train</code> 为什么按指标的 <code>output_type</code> 自动挑损失函数（BINARY→<code>BinaryMetricLoss</code>，连续 / 离散→<code>MSELoss</code>）？</div>
   <ol class="opts">
-    <li>因为这样能少装一个依赖</li>
-    <li>因为 <code>MSELoss</code> 根本不能用于任何指标</li>
+    <li>因为选错 loss 会让 <code>DSPyOptimizer</code> 直接无法启动</li>
+    <li>因为 <code>MSELoss</code> 只能反向传播梯度，离散指标没有梯度所以要换 loss</li>
     <li>不同输出类型「错得有多离谱」的度量方式不同，选对 loss 才能给优化器正确的方向</li>
-    <li>因为损失函数随便选结果都一样</li>
+    <li>因为二分类指标的误差天然比连续指标大，必须用更重的 loss 压制</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>

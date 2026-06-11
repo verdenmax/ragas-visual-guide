@@ -362,8 +362,8 @@ MLflow 侧的 <span class="inline">sync_trace</span> 改走 <span class="mono">g
 <div class="quiz">
   <div class="qn">1. 把评测过程上报到 Langfuse / MLflow / LangSmith 这类观测平台，主要解决什么问题？</div>
   <ol class="opts">
-    <li>让评测从此不再需要数据集</li>
-    <li>让指标分数自动变高</li>
+    <li>把评测的打分逻辑外包给观测平台，本地不再计算指标</li>
+    <li>自动把多次评测的分数合并成一个综合排行榜</li>
     <li>让评测彻底离线、不留任何记录</li>
     <li>让每次评测的每一步可视化、可回溯，便于在生产级大盘上定位薄弱环节</li>
   </ol>
@@ -378,7 +378,7 @@ MLflow 侧的 <span class="inline">sync_trace</span> 改走 <span class="mono">g
     <li>因为每家平台只能上报一种指标</li>
     <li>因为这些平台在技术上完全相同</li>
     <li>团队各有既用的观测栈，多家适配让 ragas 融入现有工具链，而非逼人迁移</li>
-    <li>因为只有这样评测才能并发执行</li>
+    <li>因为不同平台分别负责上报 token、成本和分数，缺一不可</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>

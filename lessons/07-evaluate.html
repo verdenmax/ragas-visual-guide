@@ -355,7 +355,7 @@ df = result.to_pandas()  <span class="cm"># 原始数据列 + 每个指标一列
   <div class="qn">1. 调用 <code>evaluate()</code> 时，若需要裁判的指标没绑 LLM、你也没传，会发生什么？为什么这样设计？</div>
   <ol class="opts">
     <li>自动建一个默认裁判 <code>llm_factory('gpt-4o-mini')</code>，让最小例子开箱即跑</li>
-    <li>随机挑一个本地模型来打分</li>
+    <li>自动降级用一个轻量的本地规则裁判，完全不产生 API 费用</li>
     <li>直接报错，要求必须显式传入 LLM</li>
     <li>跳过该指标、不打分</li>
   </ol>
@@ -369,7 +369,7 @@ df = result.to_pandas()  <span class="cm"># 原始数据列 + 每个指标一列
   <ol class="opts">
     <li>因为 <code>total_cost</code> 已被废弃</li>
     <li>因为不同 LLM 回包里 token 用量的格式不一，需要 parser 告诉 ragas 怎么解析，否则它无从统计</li>
-    <li>因为成本是随机生成的</li>
+    <li>因为统计 token 会拖慢评测，ragas 默认关闭、传了 parser 才开启</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>

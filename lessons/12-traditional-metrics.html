@@ -366,7 +366,7 @@ print(r1.value, r2.value)  <span class="cm"># 0.xx  1.0</span></pre>
 <div class="quiz">
   <div class="qn">1. 为什么 BLEU / ROUGE / chrF / ExactMatch 这类传统指标特别适合放进 CI 回归？</div>
   <ol class="opts">
-    <li>因为它们能顺便自动生成测试集</li>
+    <li>因为它们会根据历史结果自我校准，越跑越准</li>
     <li>因为它们确定、零 token、毫秒级：同样输入永远同样输出</li>
     <li>因为它们比 LLM 指标更懂语义</li>
     <li>因为它们必须联网调用 API 才更准</li>

@@ -387,9 +387,9 @@ ragas 内置了几十个指标，但它们正处在<strong>两代并存</strong>
 <div class="quiz">
   <div class="qn">2. 旧代码 <code>from ragas.metrics import Faithfulness</code> 仍能用、但会告警。这种「导入即告警」是为了什么？</div>
   <ol class="opts">
-    <li>彻底禁止任何人使用 Faithfulness</li>
+    <li>在 import 时就抛出 <code>ImportError</code>，强制用户立刻改用新路径</li>
     <li>用模块级 <code>__getattr__</code> 做平滑过渡：旧路径暂时可用、同时提示迁移到 collections，到 v1.0 再移除</li>
-    <li>让 Faithfulness 算出的分数变低</li>
+    <li>让从旧路径导入的 Faithfulness 自动切换成 collections 的新实现</li>
     <li>立刻删除旧路径，逼用户马上重写</li>
   </ol>
   <details class="accordion">

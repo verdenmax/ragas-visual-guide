@@ -361,10 +361,10 @@ kg = KnowledgeGraph.load(<span class="st">"kg.json"</span>)</pre>
 <div class="quiz">
   <div class="qn">1. <code>KnowledgeGraph</code> 为什么要建成「节点 + 关系（边）」的图，而不是一个扁平文档列表？</div>
   <ol class="opts">
-    <li>因为扁平列表存不下文本</li>
+    <li>因为图天然支持按节点类型（DOCUMENT / CHUNK）建索引，查询比扁平列表快得多</li>
     <li>图能显式记录节点之间的关联，后续才能沿边做跨节点（多跳）推理出题；扁平列表丢掉了这层关系</li>
-    <li>因为图天生比列表更省内存</li>
-    <li>因为图结构可以不调用 LLM</li>
+    <li>因为图会按相似度自动合并重复节点，扁平列表则会塞满冗余文档</li>
+    <li>因为只有挂在图节点上的文本才能被切块（chunk），列表里的文档无法切分</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
@@ -376,7 +376,7 @@ kg = KnowledgeGraph.load(<span class="st">"kg.json"</span>)</pre>
   <ol class="opts">
     <li>为单跳题挑出唯一的那个节点</li>
     <li>为多跳题备料：先把「能连起来的节点组」找出来，synthesizer 才有跨节点素材出题</li>
-    <li>为了压缩知识图谱的体积</li>
+    <li>为出题前裁掉图里的孤立节点，缩小遍历范围</li>
     <li>为了给重复节点做去重</li>
   </ol>
   <details class="accordion">

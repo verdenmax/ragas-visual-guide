@@ -353,8 +353,8 @@ eval_dataset = dataset.to_evaluation_dataset()   <span class="cm"># 回到评测
   <div class="qn">1. <code>generate</code> 为什么要复用 <code>Executor</code> + <code>new_group</code> 来「分阶段并发出题」？</div>
   <ol class="opts">
     <li>出题是大量独立的 LLM 调用，交给 <code>Executor</code> 并发提速、用 <code>new_group</code> 分阶段记录，直接复用评测线已有的调度与可观测能力</li>
-    <li>因为分阶段纯粹是为了日志好看</li>
-    <li>因为 <code>new_group</code> 能让出题过程不调用 LLM</li>
+    <li>因为只有分阶段，<code>new_group</code> 才能把出题结果直接存进 backend</li>
+    <li>因为 <code>new_group</code> 会把多次 LLM 调用合并成一次，省钱</li>
     <li>因为不借助 <code>Executor</code> 就建不出知识图谱</li>
   </ol>
   <details class="accordion">

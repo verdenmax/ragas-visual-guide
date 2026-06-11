@@ -359,7 +359,7 @@ result = <span class="kw">await</span> self.llm.agenerate(prompt_str, NLIStateme
   <div class="qn">1. Faithfulness 为什么先把答案拆成「原子陈述」再逐句做 NLI，而不是对整段笼统打分？</div>
   <ol class="opts">
     <li>逐句查证更精确，还天然产出可读的逐句 <code>reason</code></li>
-    <li>因为 LLM 读不懂较长的文本</li>
+    <li>因为 LLM 一次只能对一个句子做蕴含判断，无法整段处理</li>
     <li>因为整段打分会消耗更多 token</li>
     <li>因为拆句之后就不再需要检索资料</li>
   </ol>

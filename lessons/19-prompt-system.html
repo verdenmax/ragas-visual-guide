@@ -361,7 +361,7 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <li>为了让输出可以是任意自由文本</li>
     <li>把「答题格式」变成机器可校验的强约束，而不是口头叮嘱</li>
     <li>为了让 prompt 更短、省 token</li>
-    <li>因为 LLM 只接受 JSON schema 当输入</li>
+    <li>因为 <code>model_json_schema()</code> 会把 few-shot 例题也一并编码进去</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>

@@ -371,7 +371,7 @@ print(r_faith.value, r_prec.value, r_rec.value, r_rel.value)  <span class="cm">#
   <div class="qn">1. 为什么 <code>AnswerRelevancy</code> 构造时除了 <code>llm</code> 还必须传 <code>embeddings</code>，其他三件套却只需 <code>llm</code>？</div>
   <ol class="opts">
     <li>因为它要去检索新的上下文</li>
-    <li>因为 embeddings 只是用来让它跑得更快</li>
+    <li>因为它要先把检索到的上下文向量化，再判断是否相关</li>
     <li>因为它要把「从回答反推出的问题」与原问题算余弦相似度</li>
     <li>因为它根本不需要 LLM</li>
   </ol>
@@ -383,8 +383,8 @@ print(r_faith.value, r_prec.value, r_rec.value, r_rel.value)  <span class="cm">#
 <div class="quiz">
   <div class="qn">2. RAG 四件套为什么要分成「两个查检索质量、两个查生成质量」？</div>
   <ol class="opts">
-    <li>纯粹是为了凑成四个指标</li>
-    <li>因为四个指标的算法其实完全相同</li>
+    <li>因为四个指标必须成套使用，缺一个就无法出分</li>
+    <li>因为检索质量与生成质量本质是同一回事，分开只是表述习惯</li>
     <li>因为检索和生成必须用不同的 LLM</li>
     <li>RAG 同时依赖检索与生成两端，分开各盯一段，才能定位问题出在检索还是生成</li>
   </ol>

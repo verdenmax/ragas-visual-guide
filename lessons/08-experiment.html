@@ -346,10 +346,10 @@ print(exp)   <span class="cm"># Experiment(name=..., len=...)，结果已存进 
 <div class="quiz">
   <div class="qn">1. <code>@experiment</code> 的 <code>arun</code> 跑完后会自动把每行结果存进 backend，这体现了什么设计理念？</div>
   <ol class="opts">
-    <li>为了让结果无法被读取</li>
+    <li>为了在内存里缓存结果，加快下一次相同实验的速度</li>
     <li>因为不存盘就没法并发执行</li>
     <li>experiments-first：每次改动都留下可对比的记录，便于一版版迭代回看</li>
-    <li>为了尽量占满磁盘空间</li>
+    <li>为了让每次实验都覆盖上一次的结果，只保留最新版</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
@@ -362,7 +362,7 @@ print(exp)   <span class="cm"># Experiment(name=..., len=...)，结果已存进 
     <li>加快实验的运行速度</li>
     <li>自动把代码部署到生产环境</li>
     <li>把每个实验钉在确切的代码快照上，随时回溯「这次实验对应哪段代码」</li>
-    <li>删除所有未提交的改动</li>
+    <li>把实验结果同步上传到远程 git 仓库做备份</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>

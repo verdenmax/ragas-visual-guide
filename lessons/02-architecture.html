@@ -378,9 +378,9 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
   <div class="qn">1. 为什么 <code>ragas/__init__.py</code> 的 <code>__all__</code> 刻意不把成百上千个具名指标、各种 LLM / Embedding 包装类塞进顶层？</div>
   <ol class="opts">
     <li>因为公开面越小越稳，能降低耦合、减少升级时的破坏性变更</li>
-    <li>因为具名指标在技术上无法被 import</li>
-    <li>因为这些类还没写完</li>
-    <li>因为顶层只能放函数、不能放类</li>
+    <li>因为登记进顶层的名字会被锁定，用户无法再自定义同名指标</li>
+    <li>因为这些具名指标都是运行时动态生成的，没有固定类定义可登记</li>
+    <li>因为 <code>__all__</code> 最多只能登记几十个名字，装不下成百上千个指标</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
@@ -390,9 +390,9 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
 <div class="quiz">
   <div class="qn">2. <code>ragas.experimental</code> 用模块级 <code>__getattr__</code> 惰性加载，主要好处是什么？</div>
   <ol class="opts">
-    <li>让 experimental 永远不可用</li>
+    <li>为了把实验功能限制为仅供 ragas 内部测试使用</li>
     <li>强制所有用户都装上实验依赖</li>
-    <li>让导入速度变慢，方便插断点调试</li>
+    <li>为了每次访问时都重新加载实验模块，确保拿到最新代码</li>
     <li>没装可选依赖时 import ragas 本身不报错，真用到才触发导入并提示安装</li>
   </ol>
   <details class="accordion">

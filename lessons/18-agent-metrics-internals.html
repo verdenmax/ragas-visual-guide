@@ -361,8 +361,8 @@ classified  = <span class="kw">await</span> self._classify_topics(reference_topi
 <div class="quiz">
   <div class="qn">1. 为什么 <code>ToolCallAccuracy</code> / <code>ToolCallF1</code> 用纯规则比对，而不请 LLM 当裁判？</div>
   <ol class="opts">
-    <li>因为 LLM 看不懂工具调用</li>
-    <li>因为工具调用一定不带参数</li>
+    <li>因为工具调用的正确与否带有语义模糊，必须靠规则消除歧义</li>
+    <li>因为工具调用的参数都是自由文本，只有规则能逐字符比对</li>
     <li>工具调用是结构化的（名字 + 参数），对不对可直接比对——纯规则零 token、确定可复现</li>
     <li>因为规则比对虽更慢但更准</li>
   </ol>

@@ -371,8 +371,8 @@ ragas evals my_eval.py --dataset qa --metrics correctness --baseline v1</pre>
 <div class="quiz">
   <div class="qn">2. CLI 选用 <code>typer</code> + <code>rich</code> 这套组合，主要图什么？</div>
   <ol class="opts">
-    <li>图它们能让命令行无法显示颜色</li>
-    <li>图它们可以替代 LLM 来打分</li>
+    <li>因为 <code>rich</code> 负责解析命令行参数、<code>typer</code> 负责给输出上色</li>
+    <li>因为它们能把评测分数自动上传到观测平台</li>
     <li>因为 <code>sdk.py</code> 必须靠它们才能运行</li>
     <li><code>typer</code> 靠类型注解声明命令 / 参数省样板，<code>rich</code> 把评测结果渲染成好读的表格——好写又好看</li>
   </ol>

@@ -367,10 +367,10 @@ ds = Dataset(name=<span class="st">"qa"</span>, backend=<span class="st">"local/
 <div class="quiz">
   <div class="qn">1. ragas 让你用字符串 <code>'local/csv'</code> 选后端，而不是直接 import 具体后端类，好处是什么？</div>
   <ol class="opts">
-    <li>因为 import 后端类一定会报错</li>
+    <li>因为后端类的构造参数各家不同，用字符串能屏蔽这些差异、统一调用</li>
     <li>解耦：调用方只依赖一个名字，<code>get_registry</code> 按名查找；换实现 / 加新后端都不必改用户代码</li>
     <li>因为 csv 是唯一被支持的后端</li>
-    <li>因为字符串写起来比类名短</li>
+    <li>因为同一个字符串在不同项目里会自动映射到不同的后端实现</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
@@ -380,7 +380,7 @@ ds = Dataset(name=<span class="st">"qa"</span>, backend=<span class="st">"local/
 <div class="quiz">
   <div class="qn">2. 第三方通过 pyproject 的 entry-points 注册自己的 backend，核心价值在哪？</div>
   <ol class="opts">
-    <li>一个 entry-point 只能注册一个后端，没别的用处</li>
+    <li>entry-points 注册的后端只能在安装时使用一次，重启后失效</li>
     <li>必须先 fork ragas 源码才能加后端</li>
     <li>注册后会覆盖掉所有内置后端</li>
     <li><code>pip install</code> 带 entry-point 的包后，注册表启动一扫即发现，无需改 ragas 一行即可即插即用</li>

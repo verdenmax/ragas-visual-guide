@@ -351,7 +351,7 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
   <ol class="opts">
     <li>因为 tenacity 重试必须靠索引</li>
     <li>因为索引决定任务的执行优先级</li>
-    <li>因为索引是用来计费的</li>
+    <li>因为索引被当作缓存 key，用来命中上次相同任务的结果</li>
     <li>并发完成的顺序是乱的，带上原始索引，收集后才能按输入顺序还原，保证结果保序</li>
   </ol>
   <details class="accordion">
@@ -362,8 +362,8 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
 <div class="quiz">
   <div class="qn">2. 单个任务抛错时，为什么默认（<code>raise_exceptions=False</code>）把它转成 <code>np.nan</code> 而不是让整轮崩掉？</div>
   <ol class="opts">
-    <li>因为 <code>np.nan</code> 比异常更省内存</li>
-    <li>因为 LLM 抛的错根本无法被捕获</li>
+    <li>因为把失败行记成 <code>np.nan</code> 相当于给它打 0 分，对均值最保守</li>
+    <li>因为异常对象无法被 <code>Executor</code> 的结果列表收集，只能用 <code>np.nan</code> 占位</li>
     <li>一行出错就废掉整批评测代价太大；转成 <code>np.nan</code> 让该行缺测、其余结果照常产出，整轮更稳健</li>
     <li>因为这样能自动重跑所有失败任务</li>
   </ol>

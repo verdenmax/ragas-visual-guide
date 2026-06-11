@@ -361,7 +361,7 @@ personas = generate_personas_from_kg(kg=kg, llm=llm, num_personas=3)
   <div class="qn">2. <code>BaseScenario</code> = nodes + style（<code>QueryStyle</code>）+ length（<code>QueryLength</code>）+ persona，这样组合的目的是？</div>
   <ol class="opts">
     <li>因为这样能减少图里的节点数量</li>
-    <li>因为风格和长度是用来计费的</li>
+    <li>因为风格和长度决定了该用哪个合成器出题</li>
     <li>因为这四个字段缺一个就无法存盘</li>
     <li>用「谁问 × 什么风格 × 多长 × 基于哪些节点」的组合撑开测试集多样性，覆盖更多真实提问形态</li>
   </ol>

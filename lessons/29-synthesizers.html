@@ -351,7 +351,7 @@ dist = default_query_distribution(llm, kg)
 <div class="quiz">
   <div class="qn">1. 出题为什么拆成 <code>generate_scenarios</code> → <code>generate_sample</code> 两步？</div>
   <ol class="opts">
-    <li>因为一步到位就没法调用 LLM</li>
+    <li>因为一步生成问答会超出 LLM 的上下文窗口，必须拆开</li>
     <li>先定「考什么场景」，再落成具体样本；两步解耦让场景规划与样本生成各自可控、可复用</li>
     <li>因为 scenario 和 sample 必须来自不同的模型</li>
     <li>因为拆成两步比一步更省 token</li>
@@ -364,7 +364,7 @@ dist = default_query_distribution(llm, kg)
 <div class="quiz">
   <div class="qn">2. <code>default_query_distribution</code> 为什么要「过滤掉没有有效簇的合成器」？</div>
   <ol class="opts">
-    <li>因为过滤掉一些合成器能让最终分数更高</li>
+    <li>因为没有有效簇的合成器会直接抛异常中断整个出题流程</li>
     <li>因为合成器太多会导致超时</li>
     <li>因为单跳合成器从来不会被用到</li>
     <li>多跳合成器需要图里有可连接的节点簇；图谱撑不起时先剔除，免得分了配额却出不出题</li>

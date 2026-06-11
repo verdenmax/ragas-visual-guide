@@ -371,7 +371,7 @@ harmfulness = AspectCritic(
 <div class="quiz">
   <div class="qn">1. AnswerRelevancy 为什么要从答案「反向生成问题」再与原问题算余弦相似度，而不是直接问 LLM「切题吗」？</div>
   <ol class="opts">
-    <li>因为 LLM 读不懂原始问题</li>
+    <li>因为直接问「切题吗」只能得到是 / 否，无法给出 0–1 的连续分</li>
     <li>因为这样就可以完全不调用 LLM</li>
     <li>因为反向生成不需要 embeddings</li>
     <li>把主观的「切不切题」转成可计算的相似度：真切题，反推出的问题就与原问题语义相近</li>

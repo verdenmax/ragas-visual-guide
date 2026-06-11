@@ -373,7 +373,7 @@ _required_columns = {
   <ol class="opts">
     <li>因为构造时校验能让打分本身更快</li>
     <li>因为 <code>InstructorBaseRagasLLM</code> 不需要 API key</li>
-    <li>因为 langchain 的模型质量更差</li>
+    <li>因为 langchain 包装的 LLM 只有同步接口，无法支持异步打分</li>
     <li>把错误前移到构造期：传错模型当场 <code>ValueError</code>，而不是评测跑到一半才炸</li>
   </ol>
   <details class="accordion">

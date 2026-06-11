@@ -355,8 +355,8 @@ testset = generator.generate_with_langchain_docs(docs, testset_size=10)   <span 
 <div class="quiz">
   <div class="qn">1. 各框架集成为什么把它依赖的第三方库 import 下沉到各自子模块，而不在 <code>integrations</code> 包顶层统一导入？</div>
   <ol class="opts">
-    <li>因为 Python 顶层模块里不允许写 import</li>
-    <li>因为这样能让所有集成都跑得更快</li>
+    <li>因为顶层 <code>__init__</code> 里写 import 会和子模块形成循环依赖</li>
+    <li>因为按子模块下沉能让每个集成自动选用各自最新版的依赖</li>
     <li>因为各框架依赖之间一定会互相覆盖</li>
     <li>「按插头分装」：缺某框架的依赖只断那一路集成，不会让整个 <code>integrations</code> 包 import 失败</li>
   </ol>

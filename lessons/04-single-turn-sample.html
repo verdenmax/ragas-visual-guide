@@ -367,10 +367,10 @@ sample.get_features()  <span class="cm"># ['user_input', 'response', 'reference'
 <div class="quiz">
   <div class="qn">1. 为什么 <code>SingleTurnSample</code> 的字段几乎全是 <code>Optional</code>（默认 <code>None</code>）？</div>
   <ol class="opts">
-    <li>因为这些字段其实都没用</li>
+    <li>因为缺失的字段会在评测时由 LLM 自动补全，所以可以先留空</li>
     <li>为了用一个模型适配不同指标——缺哪栏就空着，按需带列</li>
     <li>纯粹为了减少内存占用</li>
-    <li>因为 pydantic 不支持必填字段</li>
+    <li>因为不同指标会动态往样本里增删字段，必须全设成可选</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>

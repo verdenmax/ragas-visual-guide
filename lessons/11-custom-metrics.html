@@ -379,7 +379,7 @@ print(result.value)  <span class="cm"># "positive"</span></pre>
     <li>为了让指标跑得更快、少花 token</li>
     <li>把 LLM 输出从源头卡死在 <code>allowed_values</code> 之内，省掉事后解析与兜底</li>
     <li>为了让指标自动支持多轮对话</li>
-    <li>因为 pydantic 不支持普通字符串字段</li>
+    <li>因为只有 <code>Literal[...]</code> 才允许 LLM 在 <code>allowed_values</code> 之外补充新取值</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>

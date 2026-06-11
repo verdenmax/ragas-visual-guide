@@ -353,8 +353,8 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
   <div class="qn">1. 评测中单个任务抛错时，引擎默认把该结果转成 <code>np.nan</code> 而不是直接崩溃。这样设计是为了什么？</div>
   <ol class="opts">
     <li>为了节省 token</li>
-    <li>为了让最终分数更高</li>
-    <li>因为 LLM 调用不支持抛异常</li>
+    <li>为了让出错的行用全局均值自动填补，保持样本量不变</li>
+    <li>因为 <code>np.nan</code> 会触发 ragas 自动换一个备用 LLM 重算该行</li>
     <li>为了让个别失败行不中断整轮评测，且均值用 <code>safe_nanmean</code> 自动忽略它</li>
   </ol>
   <details class="accordion">

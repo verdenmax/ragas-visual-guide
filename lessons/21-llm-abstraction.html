@@ -360,10 +360,10 @@ result = <span class="kw">await</span> llm.agenerate(prompt_str, MyOutputModel) 
 <div class="quiz">
   <div class="qn">1. 现代 instructor 路径让 LLM「直接产出 pydantic 对象」，相比经典 langchain wrapper 好在哪？</div>
   <ol class="opts">
-    <li>因为 pydantic 对象天生比字符串更省 token</li>
-    <li>因为 instructor 能让 LLM 不再需要 prompt</li>
+    <li>因为 pydantic 对象在网络传输时比 JSON 字符串更紧凑、更省带宽</li>
+    <li>因为 instructor 会在 LLM 出错时自动切换到另一个模型重试</li>
     <li>LLM 输出被直接校验成 pydantic 对象，省掉手写 JSON 解析，格式约束与重试都交给 instructor 兜底</li>
-    <li>因为用了 instructor，LLM 就不会再出错</li>
+    <li>因为 instructor 会缓存每次结构化输出，相同输入直接复用</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
@@ -375,8 +375,8 @@ result = <span class="kw">await</span> llm.agenerate(prompt_str, MyOutputModel) 
   <ol class="opts">
     <li>client 必填，因为 instructor 要给真实 client 打补丁，传 None 直接 <code>ValueError</code>；adapter='auto' 则按 client 自动挑适配器，省去手填</li>
     <li>client 可选，adapter 才是必填项</li>
-    <li>两个参数都是摆设，工厂内部会忽略它们</li>
-    <li>client 用来选语言，adapter 用来计费</li>
+    <li>client 只用于鉴权，真正发起调用的是 adapter</li>
+    <li>adapter 必须和 client 来自同一个第三方库，否则报错</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
