@@ -329,8 +329,11 @@ arel  = AnswerRelevancy(llm=eval_llm, embeddings=emb)
 <span class="cm"># golden：把测试集的"问题 + 标准答案"放进带 backend 的 ragas Dataset（第 6、8 课）</span>
 v1 = <span class="kw">await</span> run_eval.arun(golden, name=<span class="st">"v1-baseline"</span>)    <span class="cm"># 并发跑、自动落盘</span>
 
-<span class="cm"># 经典路径（第 7 课）：先把 response/contexts 填好，再一次性打分</span>
-<span class="cm"># result = evaluate(dataset=eval_dataset, metrics=[faith, crec, arel], llm=eval_llm)</span></pre>
+<span class="cm"># 经典路径（第 7 课）：evaluate() 只收旧版 ragas.metrics 指标（传统 Metric 体系），</span>
+<span class="cm"># 不认上面的 collections 指标——传进去会直接 raise TypeError，这是"两代基类"之别（第 13 课）。</span>
+<span class="cm"># 要走经典路径就换一套导入（旧版单例本就是传统 Metric）：</span>
+<span class="cm"># from ragas.metrics import faithfulness, context_recall, answer_relevancy</span>
+<span class="cm"># result = evaluate(dataset=eval_dataset, metrics=[faithfulness, context_recall, answer_relevancy], llm=eval_llm, embeddings=emb)</span></pre>
 
 <p>被 <span class="inline">@experiment</span> 装饰的函数只描述"对一行做什么"，<span class="inline">arun</span> 负责并发跑整张表、把每行结果存进 backend（<a href="08-experiment.html">第 8 课</a>）。
 经典 <span class="inline">evaluate()</span>（<a href="07-evaluate.html">第 7 课</a>）则要求数据集里 <span class="mono">response</span> / <span class="mono">retrieved_contexts</span> 已经备齐，适合"一次性算个分"。</p>
@@ -346,7 +349,8 @@ v1 = <span class="kw">await</span> run_eval.arun(golden, name=<span class="st">"
     <div class="qa">
       <div class="q">✅ 用 @experiment 还是 evaluate()？</div>
       <div class="a">要"改 → 跑 → 比"的可持续迭代、每版留痕，用 <span class="inline">@experiment</span>（推荐，<a href="31-experiments-deep.html">第 31 课</a>）；
-        只想对一份已填好的数据集<strong>快速算个总分</strong>，用经典 <span class="inline">evaluate()</span>（已废弃但仍可用，<a href="07-evaluate.html">第 7 课</a>）。两条入口共用同一套 collections 指标。</div>
+        只想对一份已填好的数据集<strong>快速算个总分</strong>，用经典 <span class="inline">evaluate()</span>（已废弃但仍可用，<a href="07-evaluate.html">第 7 课</a>）。
+        注意<strong>两条入口各配一代指标</strong>：<span class="inline">@experiment</span> 里直接 <span class="mono">await</span> 现代 <span class="inline">collections</span> 指标的 <span class="inline">ascore()</span>；经典 <span class="inline">evaluate()</span> 只收旧版 <span class="mono">ragas.metrics</span> 指标（传统 <span class="mono">Metric</span> 体系），把 collections 指标传进去会直接报 <span class="mono">TypeError</span>——这正是"两代基类"之别（<a href="13-metric-base.html">第 13 课</a>）。</div>
     </div>
     <div class="qa">
       <div class="q">🔁 怎么对比两版改动？</div>
@@ -378,7 +382,7 @@ v1 = <span class="kw">await</span> run_eval.arun(golden, name=<span class="st">"
   <ul>
     <li><strong>两条主线一处合流</strong>：测试生成线（文档 → <span class="inline">Testset</span>）与评测线（指标 → 分数）靠 <span class="inline">to_evaluation_dataset()</span> 一步对接，全书前 37 课的能力在此汇成一条龙。</li>
     <li><strong>@experiment 把评测闭环成迭代</strong>：把"调 RAG + 打分"写成一个函数，<span class="inline">arun</span> 并发跑、自动留痕，"改 → 跑 → 比"得以可持续滚动，而非算完就丢。</li>
-    <li><strong>统一接口、按需取舍</strong>：四件套都是 <span class="inline">await ascore(...)</span>；要留痕迭代用 <span class="inline">@experiment</span>，要快速总分用经典 <span class="inline">evaluate()</span>，同一套指标两种跑法。</li>
+    <li><strong>两代指标各配入口</strong>：现代 collections 四件套都是 <span class="inline">await ascore(...)</span>，配 <span class="inline">@experiment</span> 留痕迭代；要对已填好的数据集快速算总分，则改用经典 <span class="inline">evaluate()</span> + 旧版 <span class="mono">ragas.metrics</span> 指标——两代基类不通用，别混着传（<a href="13-metric-base.html">第 13 课</a>）。</li>
   </ul>
 </div>
 
