@@ -356,7 +356,41 @@ classified  = <span class="kw">await</span> self._classify_topics(reference_topi
     <li><span class="inline">AgentGoalAccuracy</span> = <span class="inline">WithReference</span> 别名，另有 <span class="inline">WithoutReference</span>；TopicAdherence 用 <span class="mono">reference_topics</span> + <span class="mono">mode</span>（默认 f1）。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. 为什么 <code>ToolCallAccuracy</code> / <code>ToolCallF1</code> 用纯规则比对，而不请 LLM 当裁判？</div>
+  <ol class="opts">
+    <li>因为 LLM 看不懂工具调用</li>
+    <li>因为工具调用一定不带参数</li>
+    <li>工具调用是结构化的（名字 + 参数），对不对可直接比对——纯规则零 token、确定可复现</li>
+    <li>因为规则比对虽更慢但更准</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：C</strong>。工具调用是名字 + 参数字典的结构化数据，正确与否可精确比对、无语义模糊，所以走规则：零 token、确定、可复现、快。而「目标达成没 / 跑没跑题」涉及语义才请 LLM。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. <code>ToolCallAccuracy</code> 与 <code>ToolCallF1</code> 的判定口径差别是什么？</div>
+  <ol class="opts">
+    <li>Accuracy 在意顺序与参数（默认 <code>strict_order=True</code>）；F1 把调用看成无序集合，只问该调的调了没、有没有多调</li>
+    <li>Accuracy 用 LLM，F1 用规则</li>
+    <li>两者完全一样，只是名字不同</li>
+    <li>F1 在意顺序，Accuracy 把调用看成集合</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。<code>ToolCallAccuracy</code> 做序列对齐 + 参数精确匹配（讲顺序）；<code>ToolCallF1</code> 把调用集合化（名字 + 参数都同才算一个）算 TP/FP/FN 求 F1（顺序无关）。</div></div></div>
+  </details>
+</div>
+<div class="card spark">
+  <div class="tag">💭 发散思考（没有标准答案，动手或动脑想想）</div>
+  <ul>
+    <li>给你自己的 Agent 设计评测：哪些维度可以用规则（零 token）来判、哪些必须请 LLM 当裁判？你会怎么在成本与准确度之间取舍？</li>
+  </ul>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="17-answer-metrics-internals.html"><div class="dir">← 上一课</div><div class="ttl">Relevancy / Factual / AspectCritic 内部</div></a><a class="next" href="19-prompt-system.html"><div class="dir">下一课 →</div><div class="ttl">Prompt 系统：PydanticPrompt</div></a></div>
 </div>
 

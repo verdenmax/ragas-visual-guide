@@ -366,7 +366,35 @@ harmfulness = AspectCritic(
     <li>AspectCritic <strong>只有 legacy 版</strong>（<span class="mono">from ragas.metrics import AspectCritic</span>，会告警），尚未迁移到 collections。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. AnswerRelevancy 为什么要从答案「反向生成问题」再与原问题算余弦相似度，而不是直接问 LLM「切题吗」？</div>
+  <ol class="opts">
+    <li>因为 LLM 读不懂原始问题</li>
+    <li>因为这样就可以完全不调用 LLM</li>
+    <li>因为反向生成不需要 embeddings</li>
+    <li>把主观的「切不切题」转成可计算的相似度：真切题，反推出的问题就与原问题语义相近</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。直接问「切题吗」主观难量化。反向生成把它转成可计算：若答案真在回答原问题，反推出的问题应与原问题相似度高；跑题则对不上。它需 <code>embeddings</code>，且全敷衍（noncommittal）直接 0 分。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. <code>AspectCritic</code> 与 AnswerRelevancy / FactualCorrectness 在「所属栈」上有何不同？</div>
+  <ol class="opts">
+    <li><code>AspectCritic</code> 目前「只有 legacy 版」（导入会触发废弃告警），尚未迁移到 collections</li>
+    <li>三者都只有 legacy 版</li>
+    <li>三者都已在 collections 里</li>
+    <li><code>AspectCritic</code> 在 collections，另两个在 legacy</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。AnswerRelevancy 与 FactualCorrectness 在现代 collections；<code>AspectCritic</code> 仍停在经典栈（<code>from ragas.metrics import</code> 会告警），底层是 <code>MetricWithLLM</code> + 单 / 多轮。</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="16-context-metrics-internals.html"><div class="dir">← 上一课</div><div class="ttl">Context Precision / Recall 内部</div></a><a class="next" href="18-agent-metrics-internals.html"><div class="dir">下一课 →</div><div class="ttl">Agent / 多轮指标内部</div></a></div>
 </div>
 

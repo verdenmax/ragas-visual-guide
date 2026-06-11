@@ -353,7 +353,35 @@ score = sum(attributions) / len(attributions)</pre>
     <li>collections 规范实现<strong>不使用</strong> ensemble 投票（那是 legacy 的做法）——讲新栈以源码为准。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. <code>ContextPrecision</code> 为什么用「平均精度（MAP）」而不是简单的命中比例来计分？</div>
+  <ol class="opts">
+    <li>因为它要奖励把相关资料排在前面：相关项越靠前 <code>precision@k</code> 越高</li>
+    <li>因为简单比例无法处理 0/1 裁决</li>
+    <li>纯粹是为了和 Recall 共用同一个公式</li>
+    <li>因为 MAP 不需要逐条判定</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。检索讲究排序——把有用的资料压在后面要扣分。平均精度让相关项越靠前得分越高，正是信息检索经典的 MAP 思路；简单命中比例体现不出「排序好坏」。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. 关于现代 collections 版 Context 指标是否使用多次采样投票（Ensemble），下列哪项正确？</div>
+  <ol class="opts">
+    <li>现代 collections「不用」ensemble 投票（Precision 每条一次、Recall 整体一次）；投票是 legacy 的做法</li>
+    <li>现代 collections 必须多次采样投票才能出分</li>
+    <li>只有 Recall 用投票，Precision 不用</li>
+    <li>两代都用 ensemble 投票</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。legacy 的 <code>_context_*.py</code> 用 <code>generate_multiple</code> + <code>ensembler</code> 多数投票对抗随机性；collections 已简化为单次调用，稳定性改由 instructor 结构化输出兜底。讲新栈要以源码为准。</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="15-faithfulness-internals.html"><div class="dir">← 上一课</div><div class="ttl">Faithfulness 内部</div></a><a class="next" href="17-answer-metrics-internals.html"><div class="dir">下一课 →</div><div class="ttl">Relevancy / Factual / AspectCritic 内部</div></a></div>
 </div>
 

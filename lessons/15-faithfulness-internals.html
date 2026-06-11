@@ -353,7 +353,41 @@ result = <span class="kw">await</span> self.llm.agenerate(prompt_str, NLIStateme
     <li>规范实现在 <span class="mono">collections/faithfulness/</span>；legacy 还有用交叉编码器的 <span class="mono">FaithfulnesswithHHEM</span> 变体。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. Faithfulness 为什么先把答案拆成「原子陈述」再逐句做 NLI，而不是对整段笼统打分？</div>
+  <ol class="opts">
+    <li>逐句查证更精确，还天然产出可读的逐句 <code>reason</code></li>
+    <li>因为 LLM 读不懂较长的文本</li>
+    <li>因为整段打分会消耗更多 token</li>
+    <li>因为拆句之后就不再需要检索资料</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。先拆成无代词、可独立判断的原子陈述，再逐句对照 context 判蕴含，比「整段一把抓」更精确，也让每句都带上判定理由；得分 = 有据句数 / 总句数。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. legacy 的 <code>FaithfulnesswithHHEM</code> 与标准 Faithfulness 是什么关系？</div>
+  <ol class="opts">
+    <li>它是确定性指标，不需要任何模型</li>
+    <li>它用 LLM 做判断，而标准版用交叉编码器</li>
+    <li>算法骨架一样（拆句 → 逐句判 → 占比），只把第二步的逐句判断从 LLM 换成交叉编码器模型</li>
+    <li>它完全抛弃拆句，直接对整段打分</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：C</strong>。HHEM 变体仍用 LLM 拆句，但把逐句裁决换成 cross-encoder（vectara 幻觉评估模型）打分取整。说明算法骨架稳定、只是第二步的「裁判」可换；该变体仅在 legacy。</div></div></div>
+  </details>
+</div>
+<div class="card spark">
+  <div class="tag">💭 发散思考（没有标准答案，动手或动脑想想）</div>
+  <ul>
+    <li>把答案拆成原子陈述时，拆得越细越好吗？想想拆得过细 / 过粗分别会怎样影响忠实度的分数与调用成本。</li>
+  </ul>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="14-metric-result.html"><div class="dir">← 上一课</div><div class="ttl">MetricResult 双重身份</div></a><a class="next" href="16-context-metrics-internals.html"><div class="dir">下一课 →</div><div class="ttl">Context Precision / Recall 内部</div></a></div>
 </div>
 

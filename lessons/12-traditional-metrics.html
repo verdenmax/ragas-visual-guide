@@ -361,7 +361,35 @@ print(r1.value, r2.value)  <span class="cm"># 0.xx  1.0</span></pre>
     <li>实战<strong>混用</strong>最划算：传统指标快筛 + LLM 指标抓语义（对照 <a href="10-rag-metrics.html">第 10 课</a> / <a href="16-context-metrics-internals.html">第 16 课</a> 的 LLM 版）。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. 为什么 BLEU / ROUGE / chrF / ExactMatch 这类传统指标特别适合放进 CI 回归？</div>
+  <ol class="opts">
+    <li>因为它们能顺便自动生成测试集</li>
+    <li>因为它们确定、零 token、毫秒级：同样输入永远同样输出</li>
+    <li>因为它们比 LLM 指标更懂语义</li>
+    <li>因为它们必须联网调用 API 才更准</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。确定性算法同输入同输出、不花 token、毫秒出结果，跨次跨人结论一致，适合反复跑的 CI；代价是不懂语义（换个说法分可能偏低），所以常与 LLM 指标混用。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. 关于 <code>SQLSemanticEquivalence</code> 与 <code>DataCompyScore</code> 的对照，下列哪项正确？</div>
+  <ol class="opts">
+    <li>两者都是确定性算法，都不需要 LLM</li>
+    <li><code>DataCompyScore</code> 需要 LLM，<code>SQLSemanticEquivalence</code> 是确定性的</li>
+    <li>两者都需要 LLM 当裁判</li>
+    <li><code>SQLSemanticEquivalence</code> 其实需要 LLM 判语义等价，确定性的对照是 <code>DataCompyScore</code></li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。名字带 Semantic 容易让人误以为是确定性比对，其实 <code>SQLSemanticEquivalence</code> 用 LLM 判两条 SQL 是否语义等价（构造需 <code>llm</code>）；真正确定性、直接比表格数据的是 <code>DataCompyScore</code>。</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="11-custom-metrics.html"><div class="dir">← 上一课</div><div class="ttl">自定义指标（Simple 栈）</div></a><a class="next" href="13-metric-base.html"><div class="dir">下一课 →</div><div class="ttl">Metric 基类体系</div></a></div>
 </div>
 

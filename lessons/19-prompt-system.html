@@ -353,7 +353,35 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <li>别把两个同名 <span class="mono">BasePrompt</span> 搞混：一个在 <span class="mono">prompt/base.py</span>（带 generate），一个在 <span class="mono">prompt/metrics/base_prompt.py</span>（只 to_string）。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. <code>PydanticPrompt</code> 的输出签名来自 <code>output_model.model_json_schema()</code>，这样设计好在哪？</div>
+  <ol class="opts">
+    <li>为了让输出可以是任意自由文本</li>
+    <li>把「答题格式」变成机器可校验的强约束，而不是口头叮嘱</li>
+    <li>为了让 prompt 更短、省 token</li>
+    <li>因为 LLM 只接受 JSON schema 当输入</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。用 <code>output_model</code> 的 JSON schema 当输出签名，等于把格式要求写成机器可校验的强约束；再配 <code>RagasOutputParser</code> 校验、<code>FixOutputFormat</code> 在坏 JSON 时退回重填，鲁棒性藏在解析器里。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. 为什么现代 collections 指标改用更薄的 <code>BasePrompt</code>（只有 <code>to_string</code>、没有 <code>generate</code>）？</div>
+  <ol class="opts">
+    <li>因为现代指标根本不调用 LLM</li>
+    <li>因为解析与重试交给了 instructor，prompt 对象只需把考卷拼成字符串</li>
+    <li>因为现代指标不再需要 few-shot 例题</li>
+    <li>因为薄 <code>BasePrompt</code> 运行时不依赖 pydantic</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。instructor 直接把 LLM 输出校验成 pydantic 对象，格式约束与重试由它兜底；于是 collections 的 prompt 退化成「只拼字符串」，再 <code>await llm.agenerate(prompt_str, OutputModel)</code>——是一处真实的减法。</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="18-agent-metrics-internals.html"><div class="dir">← 上一课</div><div class="ttl">Agent / 多轮指标内部</div></a><a class="next" href="20-prompt-advanced.html"><div class="dir">下一课 →</div><div class="ttl">Prompt 进阶：few-shot 与翻译</div></a></div>
 </div>
 

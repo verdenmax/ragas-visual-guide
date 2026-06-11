@@ -307,6 +307,278 @@ QUIZZES = {
             "给你自己的 RAG 应用挑四件套：如果手头没有标准答案（<code>reference</code>），ContextPrecision / ContextRecall 还能照常用吗？缺了它你会用什么来近似评检索质量？",
         ],
     },
+    "11-custom-metrics.html": {
+        "mcq": [
+            {
+                "q": "<code>DiscreteMetric</code> 在 <code>__post_init__</code> 里用 <code>Literal[...]</code> 自动生成一个 pydantic 响应模型，这样设计的核心目的是什么？",
+                "opts": [
+                    "为了让指标跑得更快、少花 token",
+                    "因为 pydantic 不支持普通字符串字段",
+                    "把 LLM 输出从源头卡死在 <code>allowed_values</code> 之内，省掉事后解析与兜底",
+                    "为了让指标自动支持多轮对话",
+                ],
+                "answer": 2,
+                "why": "<code>__post_init__</code> 把 <code>allowed_values</code> 转成 <code>Literal[...]</code>，再用 <code>create_auto_response_model</code> 造响应模型，于是 LLM 只能吐出合法取值——从源头杜绝「答非所选」，不必写解析与异常兜底。速度 / token、多轮都不是它要解决的问题。",
+            },
+            {
+                "q": "Simple 栈同时给了「类」和「装饰器」两副面孔，该怎么选？",
+                "opts": [
+                    "要复用 / 保存（<code>load</code>）就用类；把现成函数一键变成指标就用装饰器",
+                    "装饰器只能做离散指标，类只能做数值指标",
+                    "两者功能完全相同，纯粹是语法糖",
+                    "类不需要 LLM，装饰器一定需要 LLM",
+                ],
+                "answer": 0,
+                "why": "类适合需要复用、版本化保存的指标；装饰器适合把一个现成函数快速包成指标，并按 <code>allowed_values</code> 的类型自动选指标种类。两者并非语法糖，也都可不依赖 LLM（如纯规则的情绪判断）。",
+            },
+        ],
+        "open": [
+            "给你自己的应用设计一个自定义指标：它的输出该是离散、数值还是排序？你会用类还是装饰器？为什么这样选？",
+        ],
+    },
+    "12-traditional-metrics.html": {
+        "mcq": [
+            {
+                "q": "为什么 BLEU / ROUGE / chrF / ExactMatch 这类传统指标特别适合放进 CI 回归？",
+                "opts": [
+                    "因为它们比 LLM 指标更懂语义",
+                    "因为它们确定、零 token、毫秒级：同样输入永远同样输出",
+                    "因为它们能顺便自动生成测试集",
+                    "因为它们必须联网调用 API 才更准",
+                ],
+                "answer": 1,
+                "why": "确定性算法同输入同输出、不花 token、毫秒出结果，跨次跨人结论一致，适合反复跑的 CI；代价是不懂语义（换个说法分可能偏低），所以常与 LLM 指标混用。",
+            },
+            {
+                "q": "关于 <code>SQLSemanticEquivalence</code> 与 <code>DataCompyScore</code> 的对照，下列哪项正确？",
+                "opts": [
+                    "两者都是确定性算法，都不需要 LLM",
+                    "两者都需要 LLM 当裁判",
+                    "<code>DataCompyScore</code> 需要 LLM，<code>SQLSemanticEquivalence</code> 是确定性的",
+                    "<code>SQLSemanticEquivalence</code> 其实需要 LLM 判语义等价，确定性的对照是 <code>DataCompyScore</code>",
+                ],
+                "answer": 3,
+                "why": "名字带 Semantic 容易让人误以为是确定性比对，其实 <code>SQLSemanticEquivalence</code> 用 LLM 判两条 SQL 是否语义等价（构造需 <code>llm</code>）；真正确定性、直接比表格数据的是 <code>DataCompyScore</code>。",
+            },
+        ],
+    },
+    "13-metric-base.html": {
+        "mcq": [
+            {
+                "q": "为什么 collections 的 <code>BaseMetric</code> 在构造时（<code>_validate_llm</code>）就拒收 langchain 包装的 LLM、只认 <code>InstructorBaseRagasLLM</code>？",
+                "opts": [
+                    "把错误前移到构造期：传错模型当场 <code>ValueError</code>，而不是评测跑到一半才炸",
+                    "因为 langchain 的模型质量更差",
+                    "因为构造时校验能让打分本身更快",
+                    "因为 <code>InstructorBaseRagasLLM</code> 不需要 API key",
+                ],
+                "answer": 0,
+                "why": "现代栈靠 instructor 拿结构化输出，必须是 <code>InstructorBaseRagasLLM</code>；构造期就校验能让「传错模型」立刻报错，而不是跑到一半才崩——这是把失败前移的务实设计。",
+            },
+            {
+                "q": "经典栈与现代栈的调用接口差别，下列哪项正确？",
+                "opts": [
+                    "两代接口完全一样，只是导入路径不同",
+                    "经典栈返回 <code>MetricResult</code>，现代栈返回裸 <code>float</code>",
+                    "经典栈 <code>single_turn_ascore(sample)</code> 吃样本对象、返回 <code>float</code>；现代栈 <code>ascore(**kwargs)</code> 吃关键字、返回 <code>MetricResult</code>",
+                    "现代栈只支持多轮样本，经典栈只支持单轮",
+                ],
+                "answer": 2,
+                "why": "两代算法相同、接口不同：经典栈 <code>single_turn_ascore</code> / <code>multi_turn_ascore</code> 吃一个样本对象返回 <code>float</code>（解释另存）；现代栈统一 <code>ascore(**kwargs)</code> 返回带值与理由的 <code>MetricResult</code>。",
+            },
+        ],
+    },
+    "14-metric-result.html": {
+        "mcq": [
+            {
+                "q": "<code>MetricResult</code> 重载 <code>__float__</code> / <code>__add__</code> / <code>__gt__</code> 等运算符，主要为了什么？",
+                "opts": [
+                    "为了让它占用更少内存",
+                    "让它无需先 <code>.value</code> 解包就能直接当数字参与运算 / 比较 / <code>sum()</code>，无侵入替换裸数字",
+                    "为了禁止它和裸数字做比较",
+                    "为了在序列化时丢掉 reason 字段",
+                ],
+                "answer": 1,
+                "why": "靠运算符重载，已有按 <code>float</code> 写的聚合代码几乎不改就能接收 <code>MetricResult</code>——它能直接算、比大小、被 <code>sum()</code>，而 reason 始终不丢。",
+            },
+            {
+                "q": "为什么 <code>MetricResult</code> 既带 <code>value</code> 又带 <code>reason</code>，而不是只返回一个分数？",
+                "opts": [
+                    "为了可解释：既能统计（数值），又能复盘为什么得这个分（评语）",
+                    "因为 pydantic 强制每个模型至少要有两个字段",
+                    "因为 reason 是用来加速运算的",
+                    "因为 value 单独存在时无法序列化",
+                ],
+                "answer": 0,
+                "why": "「分数带 why」是 ragas 可解释性的关键：<code>value</code> 用于统计聚合，<code>reason</code> 记录判分依据便于复盘；只给冷冰冰的数字就丢了诊断能力。",
+            },
+        ],
+    },
+    "15-faithfulness-internals.html": {
+        "mcq": [
+            {
+                "q": "Faithfulness 为什么先把答案拆成「原子陈述」再逐句做 NLI，而不是对整段笼统打分？",
+                "opts": [
+                    "因为整段打分会消耗更多 token",
+                    "因为 LLM 读不懂较长的文本",
+                    "因为拆句之后就不再需要检索资料",
+                    "逐句查证更精确，还天然产出可读的逐句 <code>reason</code>",
+                ],
+                "answer": 3,
+                "why": "先拆成无代词、可独立判断的原子陈述，再逐句对照 context 判蕴含，比「整段一把抓」更精确，也让每句都带上判定理由；得分 = 有据句数 / 总句数。",
+            },
+            {
+                "q": "legacy 的 <code>FaithfulnesswithHHEM</code> 与标准 Faithfulness 是什么关系？",
+                "opts": [
+                    "算法骨架一样（拆句 → 逐句判 → 占比），只把第二步的逐句判断从 LLM 换成交叉编码器模型",
+                    "它完全抛弃拆句，直接对整段打分",
+                    "它用 LLM 做判断，而标准版用交叉编码器",
+                    "它是确定性指标，不需要任何模型",
+                ],
+                "answer": 0,
+                "why": "HHEM 变体仍用 LLM 拆句，但把逐句裁决换成 cross-encoder（vectara 幻觉评估模型）打分取整。说明算法骨架稳定、只是第二步的「裁判」可换；该变体仅在 legacy。",
+            },
+        ],
+        "open": [
+            "把答案拆成原子陈述时，拆得越细越好吗？想想拆得过细 / 过粗分别会怎样影响忠实度的分数与调用成本。",
+        ],
+    },
+    "16-context-metrics-internals.html": {
+        "mcq": [
+            {
+                "q": "<code>ContextPrecision</code> 为什么用「平均精度（MAP）」而不是简单的命中比例来计分？",
+                "opts": [
+                    "因为 MAP 不需要逐条判定",
+                    "因为简单比例无法处理 0/1 裁决",
+                    "因为它要奖励把相关资料排在前面：相关项越靠前 <code>precision@k</code> 越高",
+                    "纯粹是为了和 Recall 共用同一个公式",
+                ],
+                "answer": 2,
+                "why": "检索讲究排序——把有用的资料压在后面要扣分。平均精度让相关项越靠前得分越高，正是信息检索经典的 MAP 思路；简单命中比例体现不出「排序好坏」。",
+            },
+            {
+                "q": "关于现代 collections 版 Context 指标是否使用多次采样投票（Ensemble），下列哪项正确？",
+                "opts": [
+                    "现代 collections「不用」ensemble 投票（Precision 每条一次、Recall 整体一次）；投票是 legacy 的做法",
+                    "现代 collections 必须多次采样投票才能出分",
+                    "两代都用 ensemble 投票",
+                    "只有 Recall 用投票，Precision 不用",
+                ],
+                "answer": 0,
+                "why": "legacy 的 <code>_context_*.py</code> 用 <code>generate_multiple</code> + <code>ensembler</code> 多数投票对抗随机性；collections 已简化为单次调用，稳定性改由 instructor 结构化输出兜底。讲新栈要以源码为准。",
+            },
+        ],
+    },
+    "17-answer-metrics-internals.html": {
+        "mcq": [
+            {
+                "q": "AnswerRelevancy 为什么要从答案「反向生成问题」再与原问题算余弦相似度，而不是直接问 LLM「切题吗」？",
+                "opts": [
+                    "因为反向生成不需要 embeddings",
+                    "把主观的「切不切题」转成可计算的相似度：真切题，反推出的问题就与原问题语义相近",
+                    "因为 LLM 读不懂原始问题",
+                    "因为这样就可以完全不调用 LLM",
+                ],
+                "answer": 1,
+                "why": "直接问「切题吗」主观难量化。反向生成把它转成可计算：若答案真在回答原问题，反推出的问题应与原问题相似度高；跑题则对不上。它需 <code>embeddings</code>，且全敷衍（noncommittal）直接 0 分。",
+            },
+            {
+                "q": "<code>AspectCritic</code> 与 AnswerRelevancy / FactualCorrectness 在「所属栈」上有何不同？",
+                "opts": [
+                    "<code>AspectCritic</code> 目前「只有 legacy 版」（导入会触发废弃告警），尚未迁移到 collections",
+                    "三者都已在 collections 里",
+                    "<code>AspectCritic</code> 在 collections，另两个在 legacy",
+                    "三者都只有 legacy 版",
+                ],
+                "answer": 0,
+                "why": "AnswerRelevancy 与 FactualCorrectness 在现代 collections；<code>AspectCritic</code> 仍停在经典栈（<code>from ragas.metrics import</code> 会告警），底层是 <code>MetricWithLLM</code> + 单 / 多轮。",
+            },
+        ],
+    },
+    "18-agent-metrics-internals.html": {
+        "mcq": [
+            {
+                "q": "为什么 <code>ToolCallAccuracy</code> / <code>ToolCallF1</code> 用纯规则比对，而不请 LLM 当裁判？",
+                "opts": [
+                    "因为 LLM 看不懂工具调用",
+                    "因为规则比对虽更慢但更准",
+                    "因为工具调用一定不带参数",
+                    "工具调用是结构化的（名字 + 参数），对不对可直接比对——纯规则零 token、确定可复现",
+                ],
+                "answer": 3,
+                "why": "工具调用是名字 + 参数字典的结构化数据，正确与否可精确比对、无语义模糊，所以走规则：零 token、确定、可复现、快。而「目标达成没 / 跑没跑题」涉及语义才请 LLM。",
+            },
+            {
+                "q": "<code>ToolCallAccuracy</code> 与 <code>ToolCallF1</code> 的判定口径差别是什么？",
+                "opts": [
+                    "Accuracy 在意顺序与参数（默认 <code>strict_order=True</code>）；F1 把调用看成无序集合，只问该调的调了没、有没有多调",
+                    "两者完全一样，只是名字不同",
+                    "Accuracy 用 LLM，F1 用规则",
+                    "F1 在意顺序，Accuracy 把调用看成集合",
+                ],
+                "answer": 0,
+                "why": "<code>ToolCallAccuracy</code> 做序列对齐 + 参数精确匹配（讲顺序）；<code>ToolCallF1</code> 把调用集合化（名字 + 参数都同才算一个）算 TP/FP/FN 求 F1（顺序无关）。",
+            },
+        ],
+        "open": [
+            "给你自己的 Agent 设计评测：哪些维度可以用规则（零 token）来判、哪些必须请 LLM 当裁判？你会怎么在成本与准确度之间取舍？",
+        ],
+    },
+    "19-prompt-system.html": {
+        "mcq": [
+            {
+                "q": "<code>PydanticPrompt</code> 的输出签名来自 <code>output_model.model_json_schema()</code>，这样设计好在哪？",
+                "opts": [
+                    "为了让 prompt 更短、省 token",
+                    "把「答题格式」变成机器可校验的强约束，而不是口头叮嘱",
+                    "为了让输出可以是任意自由文本",
+                    "因为 LLM 只接受 JSON schema 当输入",
+                ],
+                "answer": 1,
+                "why": "用 <code>output_model</code> 的 JSON schema 当输出签名，等于把格式要求写成机器可校验的强约束；再配 <code>RagasOutputParser</code> 校验、<code>FixOutputFormat</code> 在坏 JSON 时退回重填，鲁棒性藏在解析器里。",
+            },
+            {
+                "q": "为什么现代 collections 指标改用更薄的 <code>BasePrompt</code>（只有 <code>to_string</code>、没有 <code>generate</code>）？",
+                "opts": [
+                    "因为现代指标不再需要 few-shot 例题",
+                    "因为现代指标根本不调用 LLM",
+                    "因为解析与重试交给了 instructor，prompt 对象只需把考卷拼成字符串",
+                    "因为薄 <code>BasePrompt</code> 运行时不依赖 pydantic",
+                ],
+                "answer": 2,
+                "why": "instructor 直接把 LLM 输出校验成 pydantic 对象，格式约束与重试由它兜底；于是 collections 的 prompt 退化成「只拼字符串」，再 <code>await llm.agenerate(prompt_str, OutputModel)</code>——是一处真实的减法。",
+            },
+        ],
+    },
+    "20-prompt-advanced.html": {
+        "mcq": [
+            {
+                "q": "动态 few-shot（<code>DynamicFewShotPrompt</code>）相比写死的静态例题，好在哪？",
+                "opts": [
+                    "按当前输入用 embedding 余弦相似度从例题库临场挑最相关的 top-k，比固定例题更贴题",
+                    "它完全不需要任何例题",
+                    "它能让 prompt 不再依赖 LLM",
+                    "它把所有例题都塞进 prompt，越多越好",
+                ],
+                "answer": 0,
+                "why": "静态 <code>examples</code> 每次都喂同样例题；动态版按输入用 <code>embed_query</code> + 余弦相似度挑 top-k（默认阈值 0.7），例题随题目变化更贴题。Simple 栈没 embedding 时优雅退回最近 N 条。",
+            },
+            {
+                "q": "<code>adapt()</code> 把 prompt 翻译到另一种语言时，为什么强制「译后条数 == 译前条数」？",
+                "opts": [
+                    "因为翻译会随机丢例题，必须事后补齐",
+                    "保证 few-shot 例题结构不变、一一对应，只换语言而不重写 prompt",
+                    "因为 LLM 一次只能翻译固定条数",
+                    "因为条数变了 prompt 就无法序列化",
+                ],
+                "answer": 1,
+                "why": "<code>adapt</code> 把 <code>examples</code> 整批翻译并返回一张新 prompt（不改原件），强制条数一致能保证例题一一对应、结构零改动——题目不变、语言变了；条数对不上则报错。",
+            },
+        ],
+        "open": [
+            "你的评测要服务多语言用户：你会用 <code>adapt()</code> 把 prompt 整体翻译，还是为每种语言单独维护一套？动态 few-shot 在跨语言场景下又能帮上什么忙？",
+        ],
+    },
 }
 
 

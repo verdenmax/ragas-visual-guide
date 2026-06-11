@@ -366,7 +366,35 @@ _required_columns = {
     <li>规范实现走 <span class="mono">collections</span>；下一课拆 <span class="mono">MetricResult</span> 这个"既是分数又是理由"的返回值。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. 为什么 collections 的 <code>BaseMetric</code> 在构造时（<code>_validate_llm</code>）就拒收 langchain 包装的 LLM、只认 <code>InstructorBaseRagasLLM</code>？</div>
+  <ol class="opts">
+    <li>因为构造时校验能让打分本身更快</li>
+    <li>因为 <code>InstructorBaseRagasLLM</code> 不需要 API key</li>
+    <li>因为 langchain 的模型质量更差</li>
+    <li>把错误前移到构造期：传错模型当场 <code>ValueError</code>，而不是评测跑到一半才炸</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。现代栈靠 instructor 拿结构化输出，必须是 <code>InstructorBaseRagasLLM</code>；构造期就校验能让「传错模型」立刻报错，而不是跑到一半才崩——这是把失败前移的务实设计。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. 经典栈与现代栈的调用接口差别，下列哪项正确？</div>
+  <ol class="opts">
+    <li>现代栈只支持多轮样本，经典栈只支持单轮</li>
+    <li>两代接口完全一样，只是导入路径不同</li>
+    <li>经典栈返回 <code>MetricResult</code>，现代栈返回裸 <code>float</code></li>
+    <li>经典栈 <code>single_turn_ascore(sample)</code> 吃样本对象、返回 <code>float</code>；现代栈 <code>ascore(**kwargs)</code> 吃关键字、返回 <code>MetricResult</code></li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。两代算法相同、接口不同：经典栈 <code>single_turn_ascore</code> / <code>multi_turn_ascore</code> 吃一个样本对象返回 <code>float</code>（解释另存）；现代栈统一 <code>ascore(**kwargs)</code> 返回带值与理由的 <code>MetricResult</code>。</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="12-traditional-metrics.html"><div class="dir">← 上一课</div><div class="ttl">传统 / 非 LLM 指标</div></a><a class="next" href="14-metric-result.html"><div class="dir">下一课 →</div><div class="ttl">MetricResult 双重身份</div></a></div>
 </div>
 
