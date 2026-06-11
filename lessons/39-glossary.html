@@ -267,9 +267,94 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>术语表 · 概念索引</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+全教程 38 课、术语众多。这一页把它们<strong>一网打尽</strong>：每个术语<strong>一句话</strong>说清，并<strong>点一下就跳到</strong>讲它的那一课。
+它也是一份<strong>"概念索引"</strong>——忘了某个东西在哪讲，从这里查最快。
+</p>
+
+<div class="card detail">
+  <div class="tag">🔎 用法</div>
+  想找某个词？用浏览器的 <strong>Ctrl/⌘ + F</strong> 在本页内搜索；点"<strong>见课</strong>"列的链接直接跳到对应课。
+  术语按 <strong>① 评测核心 → ② 测试集生成 → ③ 引擎 · 工程 · 生态</strong> 分三组。
+</div>
+
+<h2>① 评测核心（数据 · 入口 · 指标）</h2>
+<table class="t">
+  <tr><th>术语</th><th>一句话</th><th>见课</th></tr>
+  <tr><td class="mono">EvaluationDataset</td><td>评测的输入"一叠考卷"：装 SingleTurnSample / MultiTurnSample，喂给 evaluate()</td><td><a href="04-single-turn-sample.html">第 4</a> · <a href="06-two-datasets.html">6 课</a></td></tr>
+  <tr><td class="mono">Dataset / DataTable</td><td>带 backend 的"存储台账"：任意 pydantic 行可反复存取、落盘，做 @experiment 时用它</td><td><a href="06-two-datasets.html">第 6 课</a></td></tr>
+  <tr><td class="mono">SingleTurnSample</td><td>最小数据单位：把一问一答的问题 / 检索资料 / 答案塞进一个 pydantic 模型，字段全 Optional</td><td><a href="04-single-turn-sample.html">第 4 课</a></td></tr>
+  <tr><td class="mono">MultiTurnSample</td><td>多轮样本：用一串结构化消息装下"对话 + 工具调用"，是 Agent / 多轮指标的载体</td><td><a href="05-multi-turn-sample.html">第 5 课</a></td></tr>
+  <tr><td class="mono">Message（Human / AI / Tool）+ ToolCall</td><td>对话积木：三类消息 + AIMessage.tool_calls 里的 ToolCall（工具名 + 参数）</td><td><a href="05-multi-turn-sample.html">第 5 课</a></td></tr>
+  <tr><td>评测生命周期（6 步）</td><td>evaluate 幕后：选指标 → 规整数据 → 注入模型 → 拆任务 → 并发跑 → 汇成 EvaluationResult</td><td><a href="03-evaluation-lifecycle.html">第 3 课</a></td></tr>
+  <tr><td class="mono">evaluate()</td><td>经典"一键阅卷"入口；已发 <span class="mono">DeprecationWarning</span>，官方改推 @experiment</td><td><a href="07-evaluate.html">第 7 课</a></td></tr>
+  <tr><td class="mono">@experiment</td><td>现代推荐入口：装饰一个 async 函数，<span class="mono">await fn.arun(dataset)</span> 跑实验并落盘</td><td><a href="08-experiment.html">第 8 课</a></td></tr>
+  <tr><td class="mono">Experiment</td><td>一张挂着 backend 的结果表；arun 取名 → 解析存储 → 并发跑 → 落盘，配 git 版本化</td><td><a href="08-experiment.html">第 8</a> · <a href="31-experiments-deep.html">31 课</a></td></tr>
+  <tr><td class="mono">Metric</td><td>指标族谱根类：经典栈 Metric → MetricWithLLM / Embeddings → SingleTurn / MultiTurnMetric</td><td><a href="13-metric-base.html">第 13 课</a></td></tr>
+  <tr><td class="mono">MetricType / MetricOutputType</td><td>两个横切枚举：单轮 / 多轮，以及 binary / discrete / continuous / ranking 输出类型</td><td><a href="13-metric-base.html">第 13 课</a></td></tr>
+  <tr><td class="mono">MetricResult</td><td>现代 ascore() 的返回值：对外能当数字运算比较，对内带 reason 评语</td><td><a href="14-metric-result.html">第 14 课</a></td></tr>
+  <tr><td>RAG 四件套（用法）</td><td><span class="mono">Faithfulness · ContextPrecision · ContextRecall · AnswerRelevancy</span> 的最小组合，检索 + 生成两端各盯一段</td><td><a href="10-rag-metrics.html">第 10 课</a></td></tr>
+  <tr><td class="mono">Faithfulness</td><td>把答案拆成原子陈述、逐句对照检索资料判忠实度，分数 = 被支撑句占比</td><td><a href="15-faithfulness-internals.html">第 15 课</a></td></tr>
+  <tr><td class="mono">ContextPrecision</td><td>检索精度：逐条判 context 有没有用，按平均精度（MAP）算，相关项越靠前越高</td><td><a href="16-context-metrics-internals.html">第 16 课</a></td></tr>
+  <tr><td class="mono">ContextRecall</td><td>检索召回：按 reference 逐句判能否归因到检索资料，算归因占比</td><td><a href="16-context-metrics-internals.html">第 16 课</a></td></tr>
+  <tr><td class="mono">AnswerRelevancy</td><td>答案相关性：让 LLM 据答案反向出题，再比生成问题与原问的嵌入相似度</td><td><a href="17-answer-metrics-internals.html">第 17 课</a></td></tr>
+  <tr><td class="mono">FactualCorrectness</td><td>事实正确性：答案与 reference 双向拆句 NLI，套 TP / FP / FN 算 P / R / F1（默认 f1）</td><td><a href="17-answer-metrics-internals.html">第 17 课</a></td></tr>
+  <tr><td class="mono">AspectCritic</td><td>一句话定义判据造二元裁判；目前<strong>只有 legacy 版</strong>，collections 未提供</td><td><a href="17-answer-metrics-internals.html">第 17 课</a></td></tr>
+  <tr><td class="mono">ToolCallAccuracy / AgentGoalAccuracy / TopicAdherence</td><td>Agent / 多轮指标：分别量工具调用、目标达成、话题守界（吃 MultiTurnSample）</td><td><a href="18-agent-metrics-internals.html">第 18 课</a></td></tr>
+  <tr><td class="mono">DiscreteMetric / NumericMetric / RankingMetric</td><td>Simple 栈三种自定义指标类（离散 / 数值 / 排序）+ 三个同名装饰器</td><td><a href="11-custom-metrics.html">第 11 课</a></td></tr>
+  <tr><td class="mono">Ensember</td><td>legacy 投票器：对多次采样做多数投票，对抗 LLM 输出的随机性</td><td><a href="13-metric-base.html">第 13 课</a></td></tr>
+  <tr><td class="mono">ragas.metrics.collections</td><td>具名指标的现代"正门"；从 <span class="mono">ragas.metrics</span> 导入它们会告警、v1.0 移除</td><td><a href="09-metrics-overview.html">第 9 课</a></td></tr>
+  <tr><td>传统指标（BLEU / ROUGE / chrF / ExactMatch…）</td><td>非 LLM、确定性算法、零 token：<span class="mono">BleuScore / RougeScore / CHRFScore / ExactMatch</span> 等</td><td><a href="12-traditional-metrics.html">第 12 课</a></td></tr>
+</table>
+
+<h2>② 测试集生成（知识图谱 → 出题）</h2>
+<table class="t">
+  <tr><th>术语</th><th>一句话</th><th>见课</th></tr>
+  <tr><td>测试生成流水线</td><td>第二大支柱的骨架：文档 → 知识图谱 → persona → scenario → sample → Testset</td><td><a href="25-testgen-overview.html">第 25 课</a></td></tr>
+  <tr><td class="mono">KnowledgeGraph</td><td>测试生成的中枢数据结构：把文档拆成节点、连边组成图，可 save / load</td><td><a href="26-knowledge-graph.html">第 26 课</a></td></tr>
+  <tr><td class="mono">Node / NodeType</td><td>图里的一个知识点（id / properties / type）；类型分 DOCUMENT / CHUNK</td><td><a href="26-knowledge-graph.html">第 26 课</a></td></tr>
+  <tr><td class="mono">Relationship</td><td>两节点间的一条边（source / target / type / bidirectional）</td><td><a href="26-knowledge-graph.html">第 26 课</a></td></tr>
+  <tr><td class="mono">Transform</td><td>把"光秃秃大节点"加工成富图的变换：切块 / 抽属性 / 连边 / 过滤四类</td><td><a href="27-transforms.html">第 27 课</a></td></tr>
+  <tr><td class="mono">Extractor</td><td>抽节点属性（摘要 / 关键词 / 实体），有 LLM 版与正则 / 嵌入版</td><td><a href="27-transforms.html">第 27 课</a></td></tr>
+  <tr><td class="mono">Splitter</td><td>把大节点切成小块，如 HeadlineSplitter 按标题层级切</td><td><a href="27-transforms.html">第 27 课</a></td></tr>
+  <tr><td class="mono">RelationshipBuilder</td><td>按相似度在节点间连边：CosineSimilarity / Jaccard / OverlapScore 等</td><td><a href="27-transforms.html">第 27 课</a></td></tr>
+  <tr><td class="mono">default_transforms</td><td>按文档长度自适应拼出的标准加工管道，<span class="mono">apply_transforms</span> 就地建图</td><td><a href="27-transforms.html">第 27 课</a></td></tr>
+  <tr><td class="mono">Persona</td><td>"谁在问"——从知识图谱自动产出的虚拟提问者，撑开提问视角</td><td><a href="28-persona-scenario.html">第 28 课</a></td></tr>
+  <tr><td class="mono">Scenario / QueryStyle / QueryLength</td><td>"怎么问"——节点 + persona + 风格（QueryStyle）+ 长度（QueryLength）的组合</td><td><a href="28-persona-scenario.html">第 28 课</a></td></tr>
+  <tr><td class="mono">Synthesizer（单跳 / 多跳）</td><td>出题官：单跳对着一个节点出题，多跳跨节点推理出题</td><td><a href="29-synthesizers.html">第 29 课</a></td></tr>
+  <tr><td class="mono">default_query_distribution</td><td>按图能力配题型（默认等概率），用 get_node_clusters 剔除图谱撑不起的题型</td><td><a href="29-synthesizers.html">第 29 课</a></td></tr>
+  <tr><td class="mono">TestsetGenerator</td><td>把知识图谱 / persona / synthesizer 串成一条龙：投入文档、产出可评测测试集</td><td><a href="30-testset-generator.html">第 30 课</a></td></tr>
+  <tr><td class="mono">Testset</td><td>测试生成的产物集合；<span class="mono">to_evaluation_dataset()</span> 一步回到评测线</td><td><a href="30-testset-generator.html">第 30 课</a></td></tr>
+  <tr><td class="mono">to_evaluation_dataset</td><td>把 Testset 转成 EvaluationDataset，直接喂给 evaluate / @experiment</td><td><a href="30-testset-generator.html">第 30 课</a></td></tr>
+</table>
+
+<h2>③ 引擎 · 工程 · 生态</h2>
+<table class="t">
+  <tr><th>术语</th><th>一句话</th><th>见课</th></tr>
+  <tr><td class="mono">PydanticPrompt</td><td>经典指标的提示载体：拼"指令 + JSON schema 输出签名 + few-shot + 输入"</td><td><a href="19-prompt-system.html">第 19 课</a></td></tr>
+  <tr><td class="mono">BasePrompt（prompt / metrics）</td><td>提示基类；现代 collections 用更薄的版本（只 to_string），解析交给 instructor</td><td><a href="19-prompt-system.html">第 19 课</a></td></tr>
+  <tr><td class="mono">PromptMixin</td><td>让 prompt 成一等公民：自动发现、整张替换、翻译、存盘复用</td><td><a href="19-prompt-system.html">第 19 课</a></td></tr>
+  <tr><td class="mono">RagasOutputParser</td><td>把 LLM 文本抽成 JSON 并校验成 output_model 的解析器</td><td><a href="19-prompt-system.html">第 19 课</a></td></tr>
+  <tr><td class="mono">FixOutputFormat</td><td>解析失败时把坏输出退回 LLM 重填（默认重试 3 次）的自修复机制</td><td><a href="19-prompt-system.html">第 19 课</a></td></tr>
+  <tr><td>动态 few-shot / <span class="mono">adapt</span>（翻译）</td><td>按相似度选 top-k 示例；adapt 翻译 prompt 且<strong>强制译后条数不变</strong></td><td><a href="20-prompt-advanced.html">第 20 课</a></td></tr>
+  <tr><td class="mono">llm_factory</td><td>现代 LLM 工厂：一行拿到 InstructorBaseRagasLLM，自动选适配器</td><td><a href="21-llm-abstraction.html">第 21 课</a></td></tr>
+  <tr><td class="mono">instructor</td><td>给 client 打补丁、让 LLM 直接吐出校验过的 pydantic 对象的库</td><td><a href="21-llm-abstraction.html">第 21 课</a></td></tr>
+  <tr><td class="mono">InstructorLLM</td><td>现代 LLM 实现：generate / agenerate 调 instructor，按厂商映射参数</td><td><a href="21-llm-abstraction.html">第 21 课</a></td></tr>
+  <tr><td class="mono">embedding_factory</td><td>Embedding 工厂；evaluate() 还能从所选 LLM 反推嵌入提供商</td><td><a href="22-embedding-abstraction.html">第 22 课</a></td></tr>
+  <tr><td class="mono">Executor</td><td>异步"阅卷调度中心"：并发跑任务、超时跳过、单题出错记 NaN 不拖累整体</td><td><a href="23-executor.html">第 23 课</a></td></tr>
+  <tr><td class="mono">RunConfig</td><td>并发与容错的总开关：超时 / 重试 / 最大并发等</td><td><a href="23-executor.html">第 23 课</a></td></tr>
+  <tr><td class="mono">new_group / RagasTracer</td><td>new_group 开运行分组；RagasTracer 把一轮运行记成 EVALUATION → ROW → METRIC trace 树</td><td><a href="24-callbacks-cost-cache.html">第 24 课</a></td></tr>
+  <tr><td class="mono">CostCallbackHandler</td><td>在 on_llm_end 收集 TokenUsage，聚合出 total_tokens / total_cost</td><td><a href="24-callbacks-cost-cache.html">第 24 课</a></td></tr>
+  <tr><td class="mono">cacher / DiskCacheBackend</td><td>@cacher 以内容 sha256 为 key 缓存 LLM / embedding 结果，DiskCacheBackend 落 .cache</td><td><a href="24-callbacks-cost-cache.html">第 24 课</a></td></tr>
+  <tr><td class="mono">BaseBackend</td><td>存储后端统一接口；内置 csv / jsonl / 内存 / 网盘四个实现</td><td><a href="32-backends.html">第 32 课</a></td></tr>
+  <tr><td class="mono">get_registry（entry-points）</td><td>拿到全局 BackendRegistry；后端经 pyproject entry-points 自动发现，第三方即插即用</td><td><a href="32-backends.html">第 32 课</a></td></tr>
+  <tr><td class="mono">MetricWithLLM.train</td><td>用人工标注"培训"指标：优化指令 + 挑示例，对齐 LLM 裁判与人类判断</td><td><a href="33-optimization-training.html">第 33 课</a></td></tr>
+  <tr><td class="mono">GeneticOptimizer</td><td>InstructionConfig 默认优化器：用遗传算法（交叉 / 变异）演化出更好的指令</td><td><a href="33-optimization-training.html">第 33 课</a></td></tr>
+  <tr><td>框架集成（LangChain / LlamaIndex / LangGraph）</td><td>把别家对象 / 轨迹转成 ragas 的消息或数据集；EvaluatorChain 反向把指标嵌进 LangSmith</td><td><a href="34-integrations-frameworks.html">第 34 课</a></td></tr>
+  <tr><td>观测集成（Langfuse / MLflow / LangSmith / Helicone / Opik）</td><td>把评测过程上报观测大盘，让每次评测可视化、可回溯每一步</td><td><a href="35-integrations-observability.html">第 35 课</a></td></tr>
+  <tr><td>读源码 · 调试 · 贡献（<span class="mono">uv · Makefile</span>）</td><td>下场改 ragas：uv 管依赖、Makefile 一键化格式 / 类型 / 测试</td><td><a href="36-source-debug-contribute.html">第 36 课</a></td></tr>
+  <tr><td>CLI（<span class="mono">ragas quickstart / evals / hello_world</span>）</td><td>装包即得 ragas 命令（typer + rich）：拉模板 / 跑评测带基线门禁 / 造最小示例</td><td><a href="37-cli.html">第 37 课</a></td></tr>
+</table>
 
   <div class="footnav"><a class="prev" href="38-capstone.html"><div class="dir">← 上一课</div><div class="ttl">端到端实战</div></a><a class="next" href="../index.html"><div class="dir">完成 →</div><div class="ttl">返回目录</div></a></div>
 </div>
