@@ -363,7 +363,7 @@ git commit -m "feat: scaffold registry + part stubs + quizzes; green empty-shell
 **编写纪律（硬性）：**
 
 - **先读源码再下笔**：写每课前打开 spec 第 5 节列出的 `/home/verden/course/ragas/src/ragas/...` 锚点文件，确认符号名与行为。
-- `<pre>` 内的 `<`、`>` 必须转义为 `&lt;`/`&gt;`，或仅用 `PRE_INLINE` 允许的标签（span/strong/b/em/u/a）——否则 check_html 报 ERR。
+- `<pre>` 内的 `<` 必须转义为 `&lt;`（check_html 只对未转义的 `<` 报 ERR）；裸 `>`（如 Python 返回类型箭头 `->`）是合法 HTML5、可保留不转义。代码高亮仅用 `PRE_INLINE` 允许的标签（span/strong/b/em/u/a）。
 - 引用源码用"文件 + 符号名"，**不写行号**。
 - 跨课引用写"第 N 课"且 N≤39；不要出现 langchain 旧文案或错误课数。
 - 中文正文；代码/标识符保留英文原名。
@@ -590,7 +590,7 @@ cd /home/verden/course/ragas-visual-guide && git add -A && git commit -m "conten
   - 测验点：`Literal` 自动响应模型解决了什么？装饰器为何要求 `score` 关键字参数？
 
 - [ ] **Step 4: 第 12 课「传统 / 非 LLM 指标」(`12-traditional-metrics.html`)**
-  - 锚点：现代规范实现 `metrics/collections/_bleu_score.py`、`_rouge_score.py`、`chrf_score`、`_string.py`（`ExactMatch`/`StringPresence`/`NonLLMStringSimilarity`/`DistanceMeasure`）、`sql_semantic_equivalence`、`datacompy_score`、`context_*`（`NonLLM*`/ID-based 变体）；旧版镜像在 `metrics/_bleu_score.py`/`_rouge_score.py`/`_string.py` 等（已废弃导出）。
+  - 锚点：现代规范实现 `metrics/collections/_bleu_score.py`、`_rouge_score.py`、`chrf_score`（类名 `CHRFScore`）、`_string.py`（`ExactMatch`/`StringPresence`/`NonLLMStringSimilarity`/`DistanceMeasure`，`ascore(reference,response)` 无 LLM）、`datacompy_score`（确定性表对比）；注意 `sql_semantic_equivalence` 的 `SQLSemanticEquivalence` 其实是 **LLM 类**（是 `DataCompyScore` 的 LLM 对照物，本课作"传统 vs LLM"对比点）；非 LLM / ID-based 的 context precision/recall 变体仅在旧版 `_context_precision.py`/`_context_recall.py`（已废弃）。
   - 类比：不请"考官"(LLM)，改用"尺子"(确定性算法)量。
   - 小节：何时用传统指标（便宜 / 可复现 / 无需 LLM）；各指标一句话；非 LLM 的 context precision/recall 变体（字符串距离 / ID 匹配）。
   - 💡 设计亮点：同一概念常有 **LLM 版 + Non-LLM 版**（成本/精度权衡）；传统指标确定性、零 token 成本。
