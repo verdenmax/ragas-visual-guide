@@ -563,21 +563,23 @@ cd /home/verden/course/ragas-visual-guide && git add -A && git commit -m "conten
 
 **Files:** Modify `src/part3.py`（`LESSON_09`…`LESSON_12`）。按模板写，写前读锚点。
 
+> **⚠️ 重要（两代指标，务必讲清）**：ragas 指标正在迁移——具名指标（Faithfulness/ContextPrecision/AnswerRelevancy/AspectCritic/FactualCorrectness/BLEU/ROUGE/ToolCallAccuracy…）的**规范位置是 `ragas.metrics.collections`**；从 `ragas.metrics` 导入它们会触发 `DeprecationWarning`（v1.0 移除）。而 `DiscreteMetric`/`NumericMetric`/`RankingMetric` 及基类原语仍规范地留在 `ragas.metrics`。现代用法：`metric = Faithfulness(llm=...)` 然后 `await metric.ascore(user_input=..., response=..., retrieved_contexts=[...])` → 返回 `MetricResult`。经典 `evaluate()` 的默认指标仍用旧版单例（`_*.py`）。**本部分一律以 `ragas.metrics.collections` 为推荐导入，并点明旧导入已废弃。**（来源：`metrics/__init__.py` 的 `__all__`/`_DEPRECATED_METRICS`/`__getattr__`；`metrics/collections/__init__.py`）
+
 - [ ] **Step 1: 第 9 课「内置指标全景」(`09-metrics-overview.html`)**
-  - 锚点：`metrics/__init__.py`（导出清单）、`metrics/base.py`（`MetricType`）、`README.md` Key Features。
+  - 锚点：`metrics/__init__.py`（`__all__` 只剩基类原语 + Simple 栈；`_DEPRECATED_METRICS` + `__getattr__` 把具名指标转向 collections）、`metrics/collections/__init__.py`（具名指标规范清单）、`metrics/base.py`（`MetricType`）、`README.md` Key Features。
   - 类比：指标像"体检套餐目录"——按器官（场景）分类挑选。
-  - 小节：LLM 类 vs 传统类；按场景分（RAG / Agent / 通用 / 字符串）；一张大表（指标 → 类型 → 用途 → 对应课程链接）。
-  - 💡 设计亮点：指标库**统一接口**（都实现 `single_turn_ascore`），可自由混用、组合进一次评测。
-  - ✅ 要点：建立指标地图；知道去哪找哪个。
-  - 测验点：LLM 类与传统类各自优劣？怎么按场景选指标？
+  - 小节：**两代指标 + 导入位置**（collections 具名 vs ragas.metrics 原语/Simple 栈，旧导入废弃）；LLM 类 vs 传统类；按场景分（RAG / Agent / 通用 / 字符串）；一张大表（指标 → 类型 → 用途 → 对应课程链接）。
+  - 💡 设计亮点：指标库分两代但**算法一致**；现代 collections 指标统一 `ascore(**kwargs)→MetricResult`，可自由混用、组合。
+  - ✅ 要点：建立指标地图；具名指标从 `ragas.metrics.collections` 导入。
+  - 测验点：具名指标的规范导入位置？为何从 `ragas.metrics` 导入会告警？
 
 - [ ] **Step 2: 第 10 课「RAG 四件套用法」(`10-rag-metrics.html`)**
-  - 锚点：`evaluation.py` 默认指标、`_faithfulness.py`、`_context_precision.py`、`_context_recall.py`、`_answer_relevance.py`。
+  - 锚点：`metrics/collections/faithfulness/`、`collections/context_precision/`、`collections/context_recall/`、`collections/answer_relevancy/`（现代规范实现）；旧版默认指标见 `evaluation.py` + `_faithfulness.py` 等。
   - 类比：RAG 像"开卷考试"——四件套分别查"有没有照着资料答 / 资料相不相关 / 资料够不够 / 答没答到点"。
-  - 小节：四个指标各衡量什么 + 各需哪些字段（Faithfulness 需 `response`+`retrieved_contexts`；ContextRecall 需 `reference`；ResponseRelevancy 需 embeddings）；最小组合示例。
+  - 小节：四个指标各衡量什么 + 各需哪些字段（Faithfulness 需 `response`+`retrieved_contexts`；ContextRecall 需 `reference`；AnswerRelevancy 需 embeddings）；用 `from ragas.metrics.collections import Faithfulness, ...` + `await metric.ascore(...)` 的最小组合示例；提一句经典 `evaluate()` 默认就是这四个（旧版单例）。
   - 💡 设计亮点：四件套覆盖 RAG 的**检索质量 + 生成质量**两端，互补成闭环。
-  - ✅ 要点：记住四件套各管一段；按需取舍。
-  - 测验点：哪两个查"检索"、哪两个查"生成"？ResponseRelevancy 为何还要 embeddings？
+  - ✅ 要点：记住四件套各管一段；现代从 collections 导入、`ascore` 调用。
+  - 测验点：哪两个查"检索"、哪两个查"生成"？AnswerRelevancy 为何还要 embeddings？
 
 - [ ] **Step 3: 第 11 课「自定义指标（Simple 栈）」(`11-custom-metrics.html`)**
   - 锚点：`metrics/discrete.py`（`DiscreteMetric`、默认 `allowed_values=["pass","fail"]`、`create_auto_response_model`）、`numeric.py`（`NumericMetric`、`range`）、`ranking.py`（`RankingMetric`）、`decorator.py`（`discrete_metric`/`numeric_metric`/`ranking_metric`、`CustomMetric`、`score` 强制 keyword-only）。
@@ -588,9 +590,9 @@ cd /home/verden/course/ragas-visual-guide && git add -A && git commit -m "conten
   - 测验点：`Literal` 自动响应模型解决了什么？装饰器为何要求 `score` 关键字参数？
 
 - [ ] **Step 4: 第 12 课「传统 / 非 LLM 指标」(`12-traditional-metrics.html`)**
-  - 锚点：`_bleu_score.py`、`_rouge_score.py`、`_chrf_score.py`、`_string.py`（`ExactMatch`/`StringPresence`/距离）、`_sql_semantic_equivalence.py`、`_datacompy_score.py`，以及 `_context_precision.py`/`_context_recall.py` 里的 `NonLLM*` 变体。
+  - 锚点：现代规范实现 `metrics/collections/_bleu_score.py`、`_rouge_score.py`、`chrf_score`、`_string.py`（`ExactMatch`/`StringPresence`/`NonLLMStringSimilarity`/`DistanceMeasure`）、`sql_semantic_equivalence`、`datacompy_score`、`context_*`（`NonLLM*`/ID-based 变体）；旧版镜像在 `metrics/_bleu_score.py`/`_rouge_score.py`/`_string.py` 等（已废弃导出）。
   - 类比：不请"考官"(LLM)，改用"尺子"(确定性算法)量。
-  - 小节：何时用传统指标（便宜 / 可复现 / 无需 LLM）；各指标一句话；`NonLLMContextPrecision`/`NonLLMContextRecall`（字符串距离）。
+  - 小节：何时用传统指标（便宜 / 可复现 / 无需 LLM）；各指标一句话；非 LLM 的 context precision/recall 变体（字符串距离 / ID 匹配）。
   - 💡 设计亮点：同一概念常有 **LLM 版 + Non-LLM 版**（成本/精度权衡）；传统指标确定性、零 token 成本。
   - ✅ 要点：能用尺子就别请考官；混合使用更划算。
   - 测验点：传统指标相比 LLM 指标的两大优势？什么时候它们不够用？
@@ -606,15 +608,15 @@ cd /home/verden/course/ragas-visual-guide && git add -A && git commit -m "conten
 
 ### Task 8: 第四部分 · 第 13–18 课（指标源码内部）
 
-**Files:** Modify `src/part4.py`（`LESSON_13`…`LESSON_18`）。按模板写，**每课先打开对应 `metrics/_*.py` 读懂 Prompt 输入/输出模型与聚合逻辑再下笔**。
+**Files:** Modify `src/part4.py`（`LESSON_13`…`LESSON_18`）。按模板写。**两代实现**：算法的规范实现现在在 `metrics/collections/<name>/metric.py` + `util.py`（基于 `SimpleBaseMetric`→`collections/base.py:BaseMetric` + instructor LLM + `ragas.prompt.metrics.base_prompt.BasePrompt`，`ascore(**kwargs)`），旧版镜像在 `metrics/_*.py`（基于 `MetricWithLLM`+`PydanticPrompt`，已废弃）。**每课先打开 collections 的规范实现读懂 Prompt 输入/输出模型与聚合逻辑再下笔**；两代算法一致，讲算法即可，并点明"规范实现在 collections、旧版已废弃"。若某指标的 collections 实现与旧版细节不同，以 **collections 实际代码**为准。
 
 - [ ] **Step 1: 第 13 课「Metric 基类体系」(`13-metric-base.html`)**
-  - 锚点：`metrics/base.py`（`Metric`、`MetricType`、`MetricOutputType`、`MetricWithLLM`、`MetricWithEmbeddings`、`SingleTurnMetric`、`MultiTurnMetric`、`SimpleBaseMetric`、`SimpleLLMMetric`、`ModeMetric`）。
-  - 类比：指标的"族谱"——两支血脉（经典 vs Simple）。
-  - 小节：经典栈（`Metric` → `MetricWithLLM`/`MetricWithEmbeddings` → `SingleTurnMetric`/`MultiTurnMetric`）；新 Simple 栈（`SimpleBaseMetric` → `SimpleLLMMetric` → Discrete/Numeric/Ranking）；`MetricType`/`MetricOutputType`；`required_columns` 的 `:optional`/`:ignored` 后缀。
-  - 💡 设计亮点：两套栈并存（反映历史演进）；`required_columns` 声明式校验；`single_turn_score` 用 `nest_asyncio`+`run` 把 async 包装成同步。
-  - ✅ 要点：看懂族谱再读具体指标；分清两支血脉。
-  - 测验点：`MetricWithLLM` 与 `SimpleLLMMetric` 各属哪支？`required_columns` 的后缀做什么？
+  - 锚点：`metrics/base.py`（`Metric`、`MetricType`、`MetricOutputType`、`MetricWithLLM`、`MetricWithEmbeddings`、`SingleTurnMetric`、`MultiTurnMetric`、`SimpleBaseMetric`、`SimpleLLMMetric`、`ModeMetric`）、`metrics/collections/base.py`（`BaseMetric(SimpleBaseMetric, NumericValidator)`）、`metrics/__init__.py`（`__all__` vs `_DEPRECATED_METRICS`）。
+  - 类比：指标的"族谱"——两代血脉（经典 `MetricWithLLM` vs 现代 `SimpleBaseMetric`/collections `BaseMetric`）。
+  - 小节：经典栈（`Metric` → `MetricWithLLM`/`MetricWithEmbeddings` → `SingleTurnMetric`/`MultiTurnMetric`，`single_turn_ascore(sample)`，已废弃导出）；现代栈（`SimpleBaseMetric` → `SimpleLLMMetric`/collections `BaseMetric` → Discrete/Numeric/Ranking 与 collections 具名指标，`ascore(**kwargs)→MetricResult`）；`MetricType`/`MetricOutputType`；`required_columns` 的 `:optional`/`:ignored` 后缀（经典栈）。
+  - 💡 设计亮点：**一次架构迁移**——把指标从"绑定 SingleTurnSample 的经典栈"迁到"组件化、用 instructor 结构化输出的现代栈"，新旧并存、算法不变（值得学习的演进案例）。
+  - ✅ 要点：看懂两代族谱再读具体指标；规范实现走 collections。
+  - 测验点：`MetricWithLLM` 与 collections `BaseMetric` 各属哪代？两代调用接口有何不同（`single_turn_ascore(sample)` vs `ascore(**kwargs)`）？
 
 - [ ] **Step 2: 第 14 课「MetricResult 双重身份」(`14-metric-result.html`)**
   - 锚点：`metrics/result.py`（`MetricResult`、`__get_pydantic_core_schema__`、`__float__`/`__int__`、算术/比较 dunders、`to_dict`）。
@@ -625,33 +627,33 @@ cd /home/verden/course/ragas-visual-guide && git add -A && git commit -m "conten
   - 测验点：为什么 `MetricResult` 要重载 `__float__`？core schema 解决了什么？
 
 - [ ] **Step 3: 第 15 课「Faithfulness 内部」(`15-faithfulness-internals.html`)**
-  - 锚点：`_faithfulness.py`（`Faithfulness`、`StatementGeneratorPrompt`、`StatementGeneratorInput`/`Output`、`NLIStatementPrompt`、`NLIStatementInput`/`Output`、`StatementFaithfulnessAnswer`(verdict 0/1)、`_create_statements`/`_create_verdicts`/`_compute_score`、`FaithfulnesswithHHEM`）。
+  - 锚点（规范）：`metrics/collections/faithfulness/metric.py`（`Faithfulness(BaseMetric)`、`ascore`、`_create_statements`/`_create_verdicts`/`_compute_score`）+ `faithfulness/util.py`（`StatementGeneratorPrompt`/`StatementGeneratorInput`/`Output`、`NLIStatementPrompt`/`NLIStatementInput`/`Output`、`StatementFaithfulnessAnswer`(verdict 0/1)）；旧版镜像 `metrics/_faithfulness.py`（含 `FaithfulnesswithHHEM`）。
   - 类比：两步判"作弊"——先把答案拆成一句句"主张"，再逐句去资料里查"有没有依据"。
-  - 小节：阶段① claim 分解；阶段② NLI 逐句裁决（verdict 0/1）；得分 = 有据数 / 总数；HHEM 变体用 cross-encoder 替代 NLI LLM。
-  - 💡 设计亮点：**claim 分解 + NLI** 是可复用范式（第 17 课 FactualCorrectness 复用 `NLIStatementPrompt`）；把模糊的"忠实"拆成可数的原子判断。
-  - ✅ 要点：忠实度 = 拆句 + 逐句查证；记住这个范式。
+  - 小节：阶段① claim 分解（`StatementGeneratorPrompt`）；阶段② NLI 逐句裁决（`NLIStatementPrompt` → verdict 0/1）；得分 = 有据数 / 总数；HHEM 变体（旧版）用 cross-encoder 替代 NLI LLM。
+  - 💡 设计亮点：**claim 分解 + NLI** 是可复用范式（第 17 课 FactualCorrectness 复用 `NLIStatementPrompt`）；现代实现用 instructor `agenerate(prompt_str, OutputModel)` 直接拿结构化结果。
+  - ✅ 要点：忠实度 = 拆句 + 逐句查证；规范实现在 collections。
   - 测验点：两个阶段分别用哪个 Prompt？得分公式是什么？
 
 - [ ] **Step 4: 第 16 课「Context Precision / Recall 内部」(`16-context-metrics-internals.html`)**
-  - 锚点：`_context_precision.py`（`ContextPrecisionPrompt`、`QAC`、`Verification`、`_calculate_average_precision`、`generate_multiple` + `ensembler.from_discrete`、`LLMContextPrecisionWithoutReference`/`NonLLM*`/`IDBased*` 变体）、`_context_recall.py`（`ContextRecallClassificationPrompt`、`ContextRecallClassification`(attributed 0/1)、`_compute_score`）、`base.py`（`Ensember`/`ensembler`）。
+  - 锚点（规范）：`metrics/collections/context_precision/`（`metric.py`+`util.py`：逐条裁决 + 平均精度；`ContextPrecisionWithReference`/`WithoutReference`/`ContextUtilization`）、`metrics/collections/context_recall/`（按句归因 attributed 0/1）；旧版镜像 `_context_precision.py`/`_context_recall.py`（`ContextPrecisionPrompt`/`QAC`/`Verification`/`_calculate_average_precision`、`ContextRecallClassificationPrompt`、`NonLLM*`/`IDBased*` 变体）、`base.py`（`Ensember`/`ensembler` 多次投票）。**写前在源码确认 collections 版是否仍用 `Ensember`/`generate_multiple`，以实际为准。**
   - 类比：precision 像"检索排序质量"（有用的是否排前面）；recall 像"标准答案每句能否在资料里找到出处"。
-  - 小节：precision 逐条裁决 + 平均精度(MAP)；recall 把 `reference` 按句归因；`Ensember` 多次投票。
-  - 💡 设计亮点：**`Ensember` 多次采样 + 多数表决**对抗 LLM 随机性、提稳；平均精度复用排序检索经典指标。
-  - ✅ 要点：precision 看排序、recall 看覆盖；投票提稳。
-  - 测验点：`Ensember` 为何能提稳？precision 为什么要算"平均精度"而非简单比例？
+  - 小节：precision 逐条裁决 + 平均精度(MAP)；recall 把 `reference` 按句归因；（若源码可见）`Ensember` 多次投票提稳。
+  - 💡 设计亮点：平均精度复用排序检索经典指标；如有 `Ensember` 多数表决则讲"多次采样对抗 LLM 随机性"。
+  - ✅ 要点：precision 看排序、recall 看覆盖。
+  - 测验点：precision 为什么要算"平均精度"而非简单比例？recall 如何按句归因？
 
 - [ ] **Step 5: 第 17 课「Relevancy / Factual / AspectCritic 内部」(`17-answer-metrics-internals.html`)**
-  - 锚点：`_answer_relevance.py`（`ResponseRelevancy`、`ResponseRelevancePrompt`、`strictness=3`、`noncommittal`、cosine 相似度）、`_factual_correctness.py`（`FactualCorrectness`、`ClaimDecompositionPrompt`、`DecompositionType`、复用 `NLIStatementPrompt`、`mode∈{precision,recall,f1}`+`beta`+`fbeta_score`）、`_aspect_critic.py`（`AspectCritic`、`definition`、`SingleTurn`/`MultiTurnAspectCriticPrompt`、`AspectCriticOutput`(verdict)、`ensembler`）。
+  - 锚点（规范，写前在源码确认实际字段/算法）：`metrics/collections/answer_relevancy/`（反向生成问题 + cosine + `noncommittal`；确认默认 strictness 值）、`metrics/collections/factual_correctness/`（claim 分解 + 双向 NLI、`mode∈{precision,recall,f1}`+`beta`+`fbeta_score`）；**AspectCritic 未迁移到 collections**，用旧版 `metrics/_aspect_critic.py`（`AspectCritic`、自然语言 `definition`、`SingleTurn`/`MultiTurnAspectCriticPrompt`、`AspectCriticOutput`(verdict)、`ensembler`）并点明"该指标仍是经典栈"。
   - 类比：relevancy 反向出题（从答案倒推问题再比相似度）；factual 双向对照；aspect critic 用一句话定义裁判。
-  - 小节：relevancy = 反向生成 `strictness` 个问题 + cosine + `noncommittal` 惩罚；factual = 双向 NLI → TP/FP/FN → `fbeta_score`；aspect critic = 自然语言 `definition` 的 0/1 裁判。
+  - 小节：relevancy = 反向生成若干问题 + cosine + `noncommittal` 惩罚；factual = 双向 NLI → TP/FP/FN → `fbeta_score`；aspect critic = 自然语言 `definition` 的 0/1 裁判。
   - 💡 设计亮点：ResponseRelevancy 的"**反向生成问题**"巧思；FactualCorrectness 用**双向 NLI** 统一 precision/recall/f1；AspectCritic 让你"**一句话造一个指标**"。
   - ✅ 要点：三种思路各有巧妙；体会"把主观判断算法化"。
   - 测验点：relevancy 为什么要反向生成问题？factual 的 TP/FP/FN 怎么来的？
 
 - [ ] **Step 6: 第 18 课「Agent / 多轮指标内部」(`18-agent-metrics-internals.html`)**
-  - 锚点：`_tool_call_accuracy.py`、`_tool_call_f1.py`、`_goal_accuracy.py`、`_topic_adherence.py`；数据基础见 `dataset_schema.py` 的 `MultiTurnSample`（呼应第 5 课）。
+  - 锚点（规范）：`metrics/collections/tool_call_accuracy/`、`tool_call_f1/`、`agent_goal_accuracy/`（`AgentGoalAccuracy`/`WithReference`/`WithoutReference`）、`topic_adherence/`；旧版镜像 `_tool_call_accuracy.py`/`_tool_call_f1.py`/`_goal_accuracy.py`/`_topic_adherence.py`；数据基础见 `dataset_schema.py` 的 `MultiTurnSample`（呼应第 5 课）。
   - 类比：评 Agent 像评"实习生干活"——工具用对没(tool call)、最终目标达成没(goal)、有没有跑题(topic)。
-  - 小节：`ToolCallAccuracy`（对比 `reference_tool_calls`）；`ToolCallF1`；`AgentGoalAccuracyWithReference`/`WithoutReference`；`TopicAdherence`；均吃 `MultiTurnSample`。
+  - 小节：`ToolCallAccuracy`（对比 `reference_tool_calls`）；`ToolCallF1`；`AgentGoalAccuracy`（有/无 reference）；`TopicAdherence`；均吃多轮消息。
   - 💡 设计亮点：把"Agent 好不好"拆成**工具 / 目标 / 话题**多个可测维度；复用多轮消息结构。
   - ✅ 要点：Agent 评测靠多轮样本 + 多维度指标。
   - 测验点：评 Agent 用单轮还是多轮样本？三个维度各测什么？
@@ -670,12 +672,12 @@ cd /home/verden/course/ragas-visual-guide && git add -A && git commit -m "conten
 **Files:** Modify `src/part5.py`（`LESSON_19`…`LESSON_24`）。按模板写，写前读锚点。
 
 - [ ] **Step 1: 第 19 课「Prompt 系统：PydanticPrompt」(`19-prompt-system.html`)**
-  - 锚点：`prompt/pydantic_prompt.py`（`PydanticPrompt`、`input_model`/`output_model`/`instruction`/`examples`、`to_string`、`_generate_output_signature`、`generate`/`generate_multiple`、`RagasOutputParser`、`FixOutputFormat`、`process_input`/`process_output`、`adapt`）、`prompt/mixin.py`（`PromptMixin`）、`prompt/base.py`（`BasePrompt`/`StringPrompt`/`StringIO`/`BoolIO`）。
+  - 锚点：`prompt/pydantic_prompt.py`（`PydanticPrompt`、`input_model`/`output_model`/`instruction`/`examples`、`to_string`、`_generate_output_signature`、`generate`/`generate_multiple`、`RagasOutputParser`、`FixOutputFormat`、`process_input`/`process_output`、`adapt`）、`prompt/mixin.py`（`PromptMixin`）、`prompt/base.py`（`BasePrompt`/`StringPrompt`/`StringIO`/`BoolIO`）。**另**：现代 collections 指标用更轻量的 `prompt/metrics/base_prompt.py`（`BasePrompt[InputModel, OutputModel]`，`to_string` + instructor `agenerate(prompt_str, OutputModel)`）——读一下做对比。
   - 类比：给 LLM 一张"带标准答题格式的考卷"，并附带"答错格式就退回重填"。
-  - 小节：`PydanticPrompt` 如何把 instruction + JSON-schema 输出签名 + few-shot + input 拼成 prompt；`generate` → LLM → `RagasOutputParser` 解析校验进 `OutputModel`；`FixOutputFormat` 自我修复（JSON 坏了重试）；`PromptMixin` 让每个指标的 prompt 可发现/可覆盖/可翻译。
-  - 💡 设计亮点：输出签名来自 `output_model.model_json_schema()`（强约束）；解析失败用 **`FixOutputFormat` 自动修复**（健壮）；`PromptMixin` 把 prompt 变成一等公民（可 get/set/save/load/adapt）。
-  - ✅ 要点：ragas 几乎所有指标都站在 `PydanticPrompt` 上；记住"约束输出 + 自我修复"。
-  - 测验点：输出签名怎么来的？JSON 解析失败时发生什么？
+  - 小节：`PydanticPrompt` 如何把 instruction + JSON-schema 输出签名 + few-shot + input 拼成 prompt；`generate` → LLM → `RagasOutputParser` 解析校验进 `OutputModel`；`FixOutputFormat` 自我修复（JSON 坏了重试）；`PromptMixin` 让经典指标的 prompt 可发现/可覆盖/可翻译；**对比**现代 `prompt/metrics/base_prompt.py` 的 `BasePrompt`（collections 指标用它 + instructor 直接产结构化输出，更薄）。
+  - 💡 设计亮点：输出签名来自 `output_model.model_json_schema()`（强约束）；解析失败用 **`FixOutputFormat` 自动修复**（健壮）；`PromptMixin` 把 prompt 变成一等公民（可 get/set/save/load/adapt）；现代栈把"解析/修复"交给 instructor，prompt 更薄。
+  - ✅ 要点：经典指标站在 `PydanticPrompt`（自带解析+修复），现代 collections 站在 `prompt/metrics/base_prompt.py` 的 `BasePrompt`（靠 instructor）；都在做"约束输出"。
+  - 测验点：`PydanticPrompt` 输出签名怎么来的？JSON 解析失败时发生什么？现代 `BasePrompt` 把解析交给了谁？
 
 - [ ] **Step 2: 第 20 课「Prompt 进阶：few-shot 与翻译」(`20-prompt-advanced.html`)**
   - 锚点：`prompt/few_shot_pydantic_prompt.py`（`FewShotPydanticPrompt`、`ExampleStore`/`InMemoryExampleStore`）、`prompt/dynamic_few_shot.py`（`DynamicFewShotPrompt`、`SimpleInMemoryExampleStore` 基于 embedding）、`prompt/simple_prompt.py`（`Prompt`：`format`/`add_example`）、`pydantic_prompt.py` 的 `adapt`（`TranslateStatements`）、`multi_modal_prompt.py`（`ImageTextPrompt`）。
