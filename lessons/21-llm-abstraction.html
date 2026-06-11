@@ -267,9 +267,94 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>LLM 抽象</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+指标要打分，得先有个会说话的模型。ragas 把"底下接哪家模型"和"上面怎么调用"解耦成 <strong>LLM 抽象层</strong>：经典栈用 langchain 包装器返回<strong>文本</strong>，现代栈用 instructor 直接返回 <strong>pydantic 对象</strong>。优先用 <span class="inline">llm_factory</span>，它会替你自动选适配器。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  LLM 抽象层像一个<strong>万能转接头</strong>：底下能插 OpenAI、Anthropic、Google、本地模型，上面给指标一个<strong>统一插口</strong>。现代版转接头还自带"<strong>结构化输出</strong>"——你要什么形状的数据（pydantic 模型），它就吐什么形状，省得你自己拿钳子去解析 JSON。
+</div>
+
+<h2>两条路径：返回文本 vs 返回对象</h2>
+<pre class="code"><span class="cm"># 经典：BaseRagasLLM（llms/base.py）</span>
+<span class="kw">class</span> <span class="fn">BaseRagasLLM</span>(ABC):
+    <span class="kw">async def</span> <span class="fn">agenerate_text</span>(prompt, n, temperature, stop, callbacks) -> LLMResult
+    <span class="cm"># 返回 langchain 的 LLMResult（文本）；解析交给 PydanticPrompt（第 19 课）</span>
+    <span class="cm"># 实现：LangchainLLMWrapper / LlamaIndexLLMWrapper</span>
+
+<span class="cm"># 现代：InstructorBaseRagasLLM</span>
+<span class="kw">class</span> <span class="fn">InstructorBaseRagasLLM</span>(ABC):
+    <span class="kw">async def</span> <span class="fn">agenerate</span>(prompt: str, response_model: Type[T]) -> T
+    <span class="cm"># 直接返回 response_model 的实例（pydantic 对象），免手写解析</span>
+    <span class="cm"># 实现：InstructorLLM</span></pre>
+
+<h2>llm_factory：一个工厂，自动选适配器</h2>
+<pre class="code"><span class="kw">def</span> <span class="fn">llm_factory</span>(model, provider=<span class="st">"openai"</span>, client=<span class="kw">None</span>,
+                adapter=<span class="st">"auto"</span>, cache=<span class="kw">None</span>, mode=<span class="kw">None</span>, **kwargs) -> InstructorBaseRagasLLM</pre>
+<p><span class="mono">client</span> <strong>必填</strong>（去掉了隐式 text-only 模式，传 <span class="mono">None</span> 直接 <span class="mono">ValueError</span>）。<span class="mono">adapter="auto"</span> 时由 <span class="inline">auto_detect_adapter</span> 选：</p>
+<ul>
+  <li>client 来自 <strong>litellm</strong> 模块 → <span class="mono">litellm</span> 适配器；</li>
+  <li>provider 是 <strong>google / gemini</strong>：新版 <span class="mono">google-genai</span> SDK → <span class="mono">instructor</span>，旧版 SDK → <span class="mono">litellm</span>；</li>
+  <li>其它 → <span class="mono">instructor</span>（默认）。</li>
+</ul>
+<pre class="code"><span class="kw">from</span> openai <span class="kw">import</span> AsyncOpenAI
+<span class="kw">from</span> ragas.llms <span class="kw">import</span> llm_factory
+
+llm = llm_factory(<span class="st">"gpt-4o-mini"</span>, client=AsyncOpenAI())     <span class="cm"># 异步：用 AsyncOpenAI</span>
+result = <span class="kw">await</span> llm.agenerate(prompt_str, MyOutputModel) <span class="cm"># 直接拿 pydantic 对象</span></pre>
+
+<h2>instructor 怎么直接吐 pydantic</h2>
+<p><span class="inline">InstructorLLM</span> 把传入的 client 用 instructor "打补丁"，<span class="inline">generate</span> / <span class="inline">agenerate</span> 内部调 <span class="mono">client.chat.completions.create(model=…, messages=…, response_model=OutputModel, **provider_kwargs)</span>，由 instructor 把回复<strong>校验成 OutputModel</strong>。不同厂商参数不一样，靠 <span class="inline">_map_provider_params</span> 分流：</p>
+<table class="t">
+  <tr><th>厂商</th><th>映射函数</th><th>处理</th></tr>
+  <tr><td>OpenAI / Azure</td><td class="mono">_map_openai_params</td><td>o 系列 / gpt-5 把 <span class="mono">max_tokens</span> 改 <span class="mono">max_completion_tokens</span>、<span class="mono">temperature</span> 固定 1.0</td></tr>
+  <tr><td>Google</td><td class="mono">_map_google_params</td><td>参数包进 <span class="mono">generation_config</span></td></tr>
+  <tr><td>Anthropic / LiteLLM</td><td>—</td><td>原样透传</td></tr>
+</table>
+<p>构造时探测 <span class="inline">is_async</span>：用同步 client 调 <span class="mono">agenerate</span> 会直接报错，提示改用 <span class="mono">generate</span>。</p>
+
+<h2>旧 wrapper 平滑退场</h2>
+<p><span class="inline">LangchainLLMWrapper</span> / <span class="inline">LlamaIndexLLMWrapper</span> 仍可导入，但被 <span class="inline">DeprecationHelper</span> 包了一层：一旦<strong>调用或取属性</strong>就发 <span class="mono">DeprecationWarning</span>，并转发到真正的类。老代码不立刻报错，但会被提醒迁移到 <span class="mono">llm_factory</span>。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 为什么有 instructor 和 litellm 两个适配器 <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 两个适配器分工</div>
+      <div class="a"><span class="mono">instructor</span> 适配器（<span class="mono">adapters/instructor.py</span>）直接给原生 client 打补丁，支持 OpenAI / Anthropic / Azure / Groq / Mistral / Google 等；<span class="mono">litellm</span> 适配器把 100+ 家模型统一路由。<span class="inline">auto_detect_adapter</span> 按 client 模块名与 provider 决定用哪个，也能用 <span class="mono">adapter="litellm"</span> 显式指定。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ mode 是干嘛的</div>
+      <div class="a"><span class="mono">mode</span> 是 instructor 的<strong>结构化输出模式</strong>（默认 JSON）。某些不支持 <span class="mono">response_format</span> 的后端要用 <span class="mono">Mode.MD_JSON</span>。这些细节都被 <span class="mono">llm_factory</span> 收进一个参数，调用方一般不用管。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  LLM 抽象都在 <span class="mono">src/ragas/llms/base.py</span>：经典基类 <span class="mono">BaseRagasLLM</span>（<span class="mono">generate_text</span> / <span class="mono">agenerate_text</span> / <span class="mono">is_finished</span>，<span class="mono">generate</span> 用 <span class="mono">RunConfig</span> 加 tenacity 重试，<a href="23-executor.html">第 23 课</a>）与包装器 <span class="mono">LangchainLLMWrapper</span> / <span class="mono">LlamaIndexLLMWrapper</span>；现代基类 <span class="mono">InstructorBaseRagasLLM</span> 与实现 <span class="mono">InstructorLLM</span>（<span class="mono">generate</span> / <span class="mono">agenerate</span>、<span class="mono">_map_provider_params</span> / <span class="mono">_map_openai_params</span> / <span class="mono">_map_google_params</span>、<span class="mono">is_async</span>）。工厂 <span class="mono">llm_factory</span> 也在此。适配器在 <span class="mono">llms/adapters/</span>（<span class="mono">__init__.py</span> 的 <span class="mono">auto_detect_adapter</span> / <span class="mono">get_adapter</span>、<span class="mono">instructor.py</span> 的 <span class="mono">InstructorAdapter</span>、<span class="mono">litellm.py</span>）。导出与弃用包装（<span class="mono">DeprecationHelper</span>，定义在 <span class="mono">ragas/utils.py</span>）在 <span class="mono">llms/__init__.py</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>instructor 让 LLM 直接吐 pydantic 对象</strong>：免手写 JSON 解析，结构化输出由库兜底（呼应 <a href="19-prompt-system.html">第 19 课</a> 的薄 prompt）。</li>
+    <li><strong>llm_factory 自动选适配器</strong>：把 OpenAI / Google / LiteLLM 的差异藏进 <span class="mono">auto_detect_adapter</span>，调用方一行搞定。</li>
+    <li><strong>client 必填</strong>：去掉隐式 text-only 模式，强制显式注入客户端，行为更可预期。</li>
+    <li><strong>DeprecationHelper 平滑迁移</strong>：旧 wrapper 不立刻删，调用即提醒，老用户不被一次性打断。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>优先用 <span class="inline">llm_factory(model, client=…)</span>：返回 <span class="mono">InstructorBaseRagasLLM</span>，<span class="mono">await llm.agenerate(prompt_str, Model)</span> 直接拿 pydantic 对象。</li>
+    <li>两条路径：经典 <span class="mono">BaseRagasLLM</span>（langchain 包装、返回文本、配 PydanticPrompt 解析）vs 现代 <span class="mono">InstructorLLM</span>（instructor、返回对象）。</li>
+    <li>适配器自动选择：litellm client → litellm；google 新 / 旧 SDK → instructor / litellm；其它 → instructor。</li>
+    <li>旧 wrapper 经 <span class="mono">DeprecationHelper</span> 保留并提醒迁移；collections 指标只认现代 LLM（<a href="13-metric-base.html">第 13 课</a>）。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="20-prompt-advanced.html"><div class="dir">← 上一课</div><div class="ttl">Prompt 进阶：few-shot 与翻译</div></a><a class="next" href="22-embedding-abstraction.html"><div class="dir">下一课 →</div><div class="ttl">Embedding 抽象</div></a></div>
 </div>

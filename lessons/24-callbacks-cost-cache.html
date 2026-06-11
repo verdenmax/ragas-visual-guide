@@ -267,9 +267,94 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>Callbacks · 成本 · 缓存</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+评测要工程化，得能<strong>看清</strong>、<strong>算钱</strong>、<strong>省时</strong>。本课讲三件套：<strong>Callbacks</strong> 把一次运行组织成可追踪的树、<strong>Cost</strong> 统计 token 与花费、<strong>Cache</strong> 用内容哈希复用结果不重跑。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  追踪（callbacks）像<strong>行车记录仪</strong>，把每一步谁调谁、输入输出都录下来；成本（cost）像<strong>油表</strong>，实时显示这趟烧了多少 token、合多少钱；缓存（cache）像<strong>记住走过的路</strong>——同样的路口同样的问题，直接用上次的答案，不再重开一遍导航。
+</div>
+
+<h2>Callbacks：把一次运行组织成树</h2>
+<p><span class="inline">new_group(name, inputs, callbacks, ...)</span> 开一个分组，返回 <span class="mono">(run_manager, group_manager)</span>，让子调用挂到父节点下。<span class="inline">RagasTracer</span> 是个回调处理器，把整轮运行记成一棵 <strong>trace 树</strong>：</p>
+<pre class="code"><span class="cm"># ChainType：运行树的层级</span>
+<span class="kw">class</span> <span class="fn">ChainType</span>(Enum):
+    EVALUATION    <span class="cm"># 整轮评测（根）</span>
+    METRIC        <span class="cm"># 某个指标</span>
+    ROW           <span class="cm"># 某一行样本</span>
+    RAGAS_PROMPT  <span class="cm"># 一次 prompt 调用（叶）</span>
+
+<span class="cm"># RagasTracer：on_chain_start 建节点并链到父节点 children，</span>
+<span class="cm"># on_chain_end 记录 outputs；traces: Dict[str, ChainRun]</span>
+<span class="cm"># parse_run_traces 自根而下遍历 EVALUATION→ROW→METRIC→PROMPT</span></pre>
+<p>于是"哪个指标、哪一行、调了哪个 prompt、输入输出是什么"都能被还原——可观测性做成了一个<strong>可挂载的回调层</strong>。</p>
+
+<h2>Cost：按厂商统一算账</h2>
+<p><span class="inline">TokenUsage</span> 记 <span class="mono">input_tokens</span> / <span class="mono">output_tokens</span> / <span class="mono">model</span>，支持同模型相加；<span class="inline">cost(cost_per_input_token, cost_per_output_token)</span> 折算费用。<span class="inline">CostCallbackHandler</span> 在每次 <span class="mono">on_llm_end</span> 收集用量，聚合出 <span class="mono">total_tokens</span> / <span class="mono">total_cost</span>。各厂商响应格式不同，靠对应 parser 抹平：</p>
+<table class="t">
+  <tr><th>厂商</th><th>解析器</th><th>取值字段</th></tr>
+  <tr><td>OpenAI</td><td class="mono">get_token_usage_for_openai</td><td class="mono">prompt_tokens / completion_tokens</td></tr>
+  <tr><td>Anthropic</td><td class="mono">get_token_usage_for_anthropic</td><td class="mono">usage.input_tokens / output_tokens</td></tr>
+  <tr><td>Bedrock</td><td class="mono">get_token_usage_for_bedrock</td><td class="mono">prompt_tokens / completion_tokens</td></tr>
+</table>
+<pre class="code"><span class="kw">from</span> ragas.cost <span class="kw">import</span> get_token_usage_for_openai
+result = evaluate(dataset, metrics, llm=llm,
+                  token_usage_parser=get_token_usage_for_openai)
+result.total_tokens()   <span class="cm"># 聚合用量</span>
+result.total_cost(cost_per_input_token=<span class="st">5e-6</span>, cost_per_output_token=<span class="st">15e-6</span>)</pre>
+
+<h2>Cache：内容哈希做 key，复用省钱</h2>
+<p><span class="inline">cacher(cache_backend)</span> 是个装饰器，包住 LLM / embedding 调用；后端为 <span class="mono">None</span> 时原样返回（零成本可关）。缓存键由<strong>函数 + 参数</strong>哈希而来：</p>
+<pre class="code"><span class="cm"># cache.py</span>
+<span class="kw">class</span> <span class="fn">CacheInterface</span>(ABC):        <span class="cm"># get / set / has_key</span>
+<span class="kw">class</span> <span class="fn">DiskCacheBackend</span>(CacheInterface): <span class="cm"># cache_dir=".cache"，基于 diskcache</span>
+
+<span class="cm"># _generate_cache_key：排除 EXCLUDE_KEYS（如 callbacks），</span>
+<span class="cm"># 再 json.dumps(sort_keys=True) + sha256；_make_hashable 递归处理嵌套</span>
+
+<span class="nd">@cacher</span>(cache_backend=DiskCacheBackend())
+<span class="kw">async def</span> <span class="fn">agenerate</span>(...): ...   <span class="cm"># 相同输入直接命中缓存</span></pre>
+<p>键里特意<strong>排除 <span class="mono">callbacks</span></strong>——它每轮都变且不影响结果，否则永远命不中缓存。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 为什么用内容哈希、而不是简单计数 <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 内容寻址</div>
+      <div class="a">用"<strong>函数 + 参数内容</strong>"的 sha256 当 key，意味着<strong>只要输入一样，结果就能复用</strong>，与调用顺序、调用次数无关。<span class="inline">_make_hashable</span> 递归把 dict / list / pydantic 等转成可排序的稳定结构，保证同一份输入永远算出同一个 key。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 三件套的边界</div>
+      <div class="a">回调<strong>只观察、不改结果</strong>；成本<strong>只统计、不计费扣款</strong>（费率由你传入）；缓存<strong>只复用、可随时关</strong>（后端给 <span class="mono">None</span> 即旁路）。三者都是<strong>可选挂载</strong>，不侵入指标逻辑。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  追踪在 <span class="mono">src/ragas/callbacks.py</span>：<span class="mono">new_group</span>、<span class="mono">ChainType</span>（<span class="mono">EVALUATION</span> / <span class="mono">METRIC</span> / <span class="mono">ROW</span> / <span class="mono">RAGAS_PROMPT</span>）、<span class="mono">ChainRun</span>（<span class="mono">run_id</span> / <span class="mono">parent_run_id</span> / <span class="mono">children</span> / <span class="mono">inputs</span> / <span class="mono">outputs</span>）、<span class="mono">RagasTracer</span>（<span class="mono">traces</span>、<span class="mono">on_chain_start</span> / <span class="mono">on_chain_end</span>、<span class="mono">to_jsons</span>）、<span class="mono">parse_run_traces</span>。成本在 <span class="mono">src/ragas/cost.py</span>：<span class="mono">TokenUsage</span>（<span class="mono">__add__</span> / <span class="mono">cost</span>）、<span class="mono">CostCallbackHandler</span>、解析器 <span class="mono">get_token_usage_for_openai</span> / <span class="mono">_anthropic</span> / <span class="mono">_bedrock</span>。缓存在 <span class="mono">src/ragas/cache.py</span>：<span class="mono">CacheInterface</span>、<span class="mono">DiskCacheBackend</span>（<span class="mono">cache_dir=".cache"</span>）、<span class="mono">cacher</span> 装饰器、<span class="mono">_generate_cache_key</span> / <span class="mono">_make_hashable</span>（sha256、排除 <span class="mono">callbacks</span>）。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>可观测性做成可挂载层</strong>：回调不改业务逻辑，按需挂上即可还原整棵运行树。</li>
+    <li><strong>缓存用内容哈希做 key</strong>：相同输入复用结果省钱，且与调用次序无关；排除 <span class="mono">callbacks</span> 防止永不命中。</li>
+    <li><strong>成本对各厂商统一抽象</strong>：用 parser 抹平字段差异，<span class="mono">TokenUsage</span> 聚合一处看清花费。</li>
+    <li><strong>三者皆可选</strong>：缓存后端给 <span class="mono">None</span> 即旁路，工程化能力按需启用。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>Callbacks：<span class="mono">new_group</span> + <span class="mono">RagasTracer</span> 把一轮运行组织成 <span class="mono">EVALUATION→ROW→METRIC→PROMPT</span> 的 trace 树。</li>
+    <li>Cost：<span class="mono">CostCallbackHandler</span> + 各厂商 parser 统计 <span class="mono">TokenUsage</span>，算 <span class="mono">total_tokens</span> / <span class="mono">total_cost</span>。</li>
+    <li>Cache：<span class="mono">cacher</span> + <span class="mono">DiskCacheBackend</span> 以内容 sha256 为 key 复用 LLM / embedding 结果（呼应 <a href="21-llm-abstraction.html">第 21 课</a>、<a href="22-embedding-abstraction.html">第 22 课</a>）。</li>
+    <li>可观测、可算钱、可缓存——评测工程化的三件套。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="23-executor.html"><div class="dir">← 上一课</div><div class="ttl">执行引擎 Executor</div></a><a class="next" href="25-testgen-overview.html"><div class="dir">下一课 →</div><div class="ttl">为什么自动造测试集</div></a></div>
 </div>

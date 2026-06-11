@@ -267,9 +267,80 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>Embedding 抽象</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+相似度类指标（语义相似度、上下文召回的匹配……）要先把文本变成向量。ragas 把这件事抽象成 <strong>Embedding 层</strong>，同样是新旧两套插口；而且 <span class="inline">evaluate()</span> 还能<strong>从你选的 LLM 反推 embedding 提供商</strong>，让你少配一次。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  Embedding 是把文本变成向量的"<strong>翻译机</strong>"——把"今天下雨"翻成一串数字坐标，意思相近的句子坐标也相近。ragas 给这台翻译机配了<strong>新旧两套插口</strong>：老插口沿用 langchain，新插口是 ragas 自己的极简接口；你只要 <span class="mono">embed_text</span> 一下，底下接 OpenAI 还是 HuggingFace 都行。
+</div>
+
+<h2>新旧两个基类：就差一个 s</h2>
+<table class="t">
+  <tr><th>维度</th><th>遗留（legacy）</th><th>现代（modern）</th></tr>
+  <tr><td><strong>基类名</strong></td><td class="mono">BaseRagasEmbeddings（带 s）</td><td class="mono">BaseRagasEmbedding（不带 s）</td></tr>
+  <tr><td><strong>底座</strong></td><td>继承 langchain <span class="mono">Embeddings</span></td><td>ragas 自有 ABC</td></tr>
+  <tr><td><strong>核心方法</strong></td><td class="mono">embed_query / embed_documents</td><td class="mono">embed_text / aembed_text</td></tr>
+  <tr><td><strong>批处理</strong></td><td>由 langchain 提供</td><td class="mono">embed_texts / aembed_texts（默认实现）</td></tr>
+</table>
+<p class="inline">类名只差一个字母 <span class="mono">s</span>，极易看混——带 s 是老的、不带 s 是新的。</p>
+
+<h2>四个现代 provider</h2>
+<pre class="code"><span class="cm"># 都实现 BaseRagasEmbedding（不带 s）的 embed_text / aembed_text</span>
+OpenAIEmbeddings        <span class="cm"># embeddings/openai_provider.py</span>
+GoogleEmbeddings        <span class="cm"># embeddings/google_provider.py</span>
+HuggingFaceEmbeddings   <span class="cm"># embeddings/huggingface_provider.py</span>
+LiteLLMEmbeddings       <span class="cm"># embeddings/litellm_provider.py（统一路由很多家）</span></pre>
+<p><span class="inline">embedding_factory</span> 是统一入口，能自动判断该给老接口还是新接口：</p>
+<pre class="code"><span class="kw">def</span> <span class="fn">embedding_factory</span>(provider=<span class="st">"openai"</span>, model=<span class="kw">None</span>, run_config=<span class="kw">None</span>,
+    client=<span class="kw">None</span>, interface=<span class="st">"auto"</span>, base_url=<span class="kw">None</span>, cache=<span class="kw">None</span>, **kwargs)</pre>
+<p class="inline">注：<span class="mono">modern_embedding_factory</span> 只是已弃用的别名，新代码直接用 <span class="mono">embedding_factory</span>。</p>
+
+<h2>从 LLM 反推 embedding 提供商</h2>
+<p>这是省心的关键一招。<span class="inline">evaluate()</span> 里如果某指标需要 embedding 而你没传，会调 <span class="inline">_infer_embedding_provider_from_llm(llm)</span>：读 <span class="mono">llm.provider</span>（或按 LLM 类名映射），缺省回退 <span class="mono">"openai"</span>，再用<strong>同一个 client</strong> 建 embedding：</p>
+<pre class="code"><span class="cm"># evaluation.py（节选思路）</span>
+provider = _infer_embedding_provider_from_llm(llm)
+embeddings = embedding_factory(provider=provider,
+                               client=getattr(llm, <span class="st">"client"</span>, <span class="kw">None</span>))
+<span class="cm"># 你只配了 LLM，embedding 自动跟上同一家——少配一次</span></pre>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 批处理工具：每家的"最佳批大小"不一样 <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 embeddings/utils.py</div>
+      <div class="a"><span class="inline">validate_texts</span> 校验输入、<span class="inline">batch_texts(texts, batch_size)</span> 切批、<span class="inline">get_optimal_batch_size(provider, model)</span> 给经验值：openai→100、cohere→96、google / vertex→5、huggingface→32、其它→10。把"一次发多少条"按厂商调到合适档位，优化吞吐又不超限。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 为什么相似度指标离不开它</div>
+      <div class="a">答案相关性（<span class="inline">AnswerRelevancy</span>）要把"从回答反推出的问题"与原问题算余弦相似度，必须先 embed 再算（用法见 <a href="10-rag-metrics.html">第 10 课</a>、内部见 <a href="17-answer-metrics-internals.html">第 17 课</a>）。Embedding 质量与一致性直接决定这些分数，所以它是这类指标的"地基"。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  接口与工厂在 <span class="mono">src/ragas/embeddings/base.py</span>：遗留基类 <span class="mono">BaseRagasEmbeddings</span>（带 s，继承 langchain <span class="mono">Embeddings</span>）与现代基类 <span class="mono">BaseRagasEmbedding</span>（不带 s，<span class="mono">embed_text</span> / <span class="mono">aembed_text</span> 抽象，<span class="mono">embed_texts</span> / <span class="mono">aembed_texts</span> 默认实现）；工厂 <span class="mono">embedding_factory</span> 与已弃用别名 <span class="mono">modern_embedding_factory</span>；推断函数 <span class="mono">_infer_embedding_provider_from_llm</span>。Provider 各自成文件：<span class="mono">openai_provider.py</span>（<span class="mono">OpenAIEmbeddings</span>）、<span class="mono">google_provider.py</span>（<span class="mono">GoogleEmbeddings</span>）、<span class="mono">huggingface_provider.py</span>（<span class="mono">HuggingFaceEmbeddings</span>）、<span class="mono">litellm_provider.py</span>（<span class="mono">LiteLLMEmbeddings</span>）。批处理工具 <span class="mono">validate_texts</span> / <span class="mono">batch_texts</span> / <span class="mono">get_optimal_batch_size</span> 在 <span class="mono">embeddings/utils.py</span>。<span class="mono">_infer_embedding_provider_from_llm</span> 在 <span class="mono">evaluation.py</span> 中被调用。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>从 LLM 反推 embedding 提供商</strong>：<span class="mono">_infer_embedding_provider_from_llm</span> 复用同一个 client，让用户少配一次、少出错。</li>
+    <li><strong>批处理按厂商调档</strong>：<span class="mono">get_optimal_batch_size</span> 把各家上限差异收进经验表，优化吞吐。</li>
+    <li><strong>新旧并存、命名留痕</strong>：仅靠一个 <span class="mono">s</span> 区分新旧基类，迁移期老 langchain 资产仍可用。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>Embedding 也分新旧栈：<span class="mono">BaseRagasEmbeddings</span>（带 s，legacy / langchain）vs <span class="mono">BaseRagasEmbedding</span>（不带 s，modern）。</li>
+    <li>四个现代 provider + 统一入口 <span class="inline">embedding_factory</span>（<span class="mono">modern_embedding_factory</span> 为弃用别名）。</li>
+    <li><span class="inline">evaluate()</span> 用 <span class="mono">_infer_embedding_provider_from_llm</span> 从 LLM 反推提供商；像 <span class="mono">AnswerRelevancy</span> 这类指标依赖 embedding（呼应 <a href="10-rag-metrics.html">第 10 课</a>、<a href="17-answer-metrics-internals.html">第 17 课</a>）。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="21-llm-abstraction.html"><div class="dir">← 上一课</div><div class="ttl">LLM 抽象</div></a><a class="next" href="23-executor.html"><div class="dir">下一课 →</div><div class="ttl">执行引擎 Executor</div></a></div>
 </div>

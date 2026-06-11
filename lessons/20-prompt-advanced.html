@@ -267,9 +267,84 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>Prompt 进阶：few-shot 与翻译</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+上一课的 <span class="mono">examples</span> 是写死在 prompt 里的固定例题。本课看两件进阶事：① <strong>动态 few-shot</strong>——用 embedding 按当前输入临场挑最像的几道例题；② <strong>adapt</strong>——把整张 prompt 翻译成另一种语言而不用重写。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  给考生<strong>看几道例题</strong>（few-shot）能显著提分；但例题不该一成不变——好老师会<strong>按这次的题目，从题库里挑最相关的几道</strong>给你看（动态 few-shot）。而当考生换了母语，老师能<strong>把整张考卷连例题一起翻译</strong>过去（adapt）：题目不变、语言变了。
+</div>
+
+<h2>静态 vs 动态 few-shot</h2>
+<p>静态：<span class="inline">PydanticPrompt.examples</span> 是固定列表，每次都喂同样的例题。动态：按输入临场从"例题库"里用<strong>余弦相似度</strong>挑 top-k。两套栈各有一个动态版：</p>
+<table class="t">
+  <tr><th>维度</th><th>经典栈（PydanticPrompt 侧）</th><th>Simple 栈</th></tr>
+  <tr><td><strong>动态 prompt</strong></td><td class="mono">FewShotPydanticPrompt</td><td class="mono">DynamicFewShotPrompt</td></tr>
+  <tr><td><strong>例题库</strong></td><td class="mono">InMemoryExampleStore</td><td class="mono">SimpleInMemoryExampleStore</td></tr>
+  <tr><td><strong>选择依据</strong></td><td>embed_query + 余弦相似度</td><td>同左</td></tr>
+  <tr><td><strong>默认 top-k</strong></td><td class="mono">top_k_for_examples=5</td><td class="mono">max_similar_examples=3</td></tr>
+  <tr><td><strong>阈值</strong></td><td class="mono">threshold=0.7</td><td class="mono">similarity_threshold=0.7</td></tr>
+  <tr><td><strong>没 embedding 时</strong></td><td>—</td><td>退回最近 N 条</td></tr>
+</table>
+<pre class="code"><span class="cm"># 经典侧：从一个普通 PydanticPrompt 升级成动态 few-shot</span>
+few = FewShotPydanticPrompt.from_pydantic_prompt(prompt, embeddings)
+<span class="cm"># 内部：把 prompt.examples 灌进 InMemoryExampleStore（顺便算好 embedding）</span>
+<span class="cm"># generate 时：example_store.get_examples(data, top_k) 按相似度挑例题，再走原本的 generate</span>
+
+<span class="cm"># Simple 侧：</span>
+dyn = DynamicFewShotPrompt.from_prompt(
+    prompt, embedding_model=emb, max_similar_examples=<span class="st">3</span>, similarity_threshold=<span class="st">0.7</span>)
+dyn.format(question=<span class="st">"…"</span>)   <span class="cm"># 临场挑最像的例题拼进去</span></pre>
+
+<h2>轻量的 Prompt：Simple 栈的 f-string 模板</h2>
+<p><span class="inline">DynamicFewShotPrompt</span> 的父类是 <span class="inline">simple_prompt.Prompt</span>——自定义指标（<a href="11-custom-metrics.html">第 11 课</a>）用的极简 prompt：<span class="mono">instruction</span> 里写 <span class="mono">{占位符}</span>，<span class="inline">format(**kwargs)</span> 填充，<span class="inline">add_example(输入dict, 输出dict)</span> 加例题，可选 <span class="mono">response_model</span>，支持 <span class="mono">save</span> / <span class="mono">load</span>（含 <span class="mono">.gz</span> 压缩）：</p>
+<pre class="code">p = Prompt(<span class="st">"判断摘要是否准确：\nResponse: {response}"</span>)
+p.add_example({<span class="st">"response"</span>: <span class="st">"…"</span>}, {<span class="st">"verdict"</span>: <span class="st">"accurate"</span>})
+p.format(response=<span class="st">"今天下雨"</span>)   <span class="cm"># 指令 + Examples 段拼成字符串</span></pre>
+
+<h2>adapt：把考卷翻译成另一种语言</h2>
+<p><span class="inline">adapt(target_language, llm)</span> 把 <span class="mono">examples</span> 里的字符串<strong>整批翻译</strong>、保持条数一致，返回一张<strong>新</strong> prompt（不改原件）。可选 <span class="mono">adapt_instruction=True</span> 连指令也翻：</p>
+<pre class="code">zh_prompt = <span class="kw">await</span> prompt.adapt(target_language=<span class="st">"chinese"</span>, llm=llm)
+<span class="cm"># examples 全部译成中文、条数不变；instruction 默认保留，adapt_instruction=True 才翻</span></pre>
+<p>经典栈用 <span class="inline">TranslateStatements</span>（一个 <span class="mono">PydanticPrompt</span>，<a href="19-prompt-system.html">第 19 课</a>），现代薄 <span class="mono">BasePrompt</span> 用内部 <span class="inline">_translate_strings</span>；<span class="inline">PromptMixin.adapt_prompts</span> 能一次翻译一个指标的<strong>全部</strong> prompt。两者都<strong>强制译后条数 == 译前条数</strong>，否则报错。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 多模态 prompt：让裁判"看图答题" <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 ImageTextPrompt</div>
+      <div class="a"><span class="mono">prompt/multi_modal_prompt.py</span> 的 <span class="inline">ImageTextPrompt</span> 也继承 <span class="mono">PydanticPrompt</span>，但把输入拼成"<strong>文字 + 图片</strong>"的消息（<span class="mono">to_prompt_value</span> → <span class="mono">ImageTextPromptValue.to_messages</span>），让裁判模型能"看图答题"，适合多模态评测。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 同一套骨架的延伸</div>
+      <div class="a">few-shot、翻译、多模态都建立在 <span class="mono">PydanticPrompt</span> 的 <span class="mono">to_string</span> / <span class="mono">examples</span> 骨架上——换的是"<strong>例题怎么选、用什么语言、带不带图片</strong>"，核心结构不变。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  动态 few-shot：经典侧在 <span class="mono">src/ragas/prompt/few_shot_pydantic_prompt.py</span>（<span class="mono">FewShotPydanticPrompt</span>、<span class="mono">ExampleStore</span> / <span class="mono">InMemoryExampleStore</span>、<span class="mono">from_pydantic_prompt</span>），Simple 侧在 <span class="mono">prompt/dynamic_few_shot.py</span>（<span class="mono">DynamicFewShotPrompt</span>、<span class="mono">SimpleExampleStore</span> / <span class="mono">SimpleInMemoryExampleStore</span>、<span class="mono">from_prompt</span>），都用 <span class="mono">embed_query</span> + 余弦相似度选 top-k（阈值 0.7）。轻量 <span class="mono">Prompt</span> 在 <span class="mono">prompt/simple_prompt.py</span>（<span class="mono">format</span> / <span class="mono">add_example</span> / <span class="mono">save</span> / <span class="mono">load</span>）。翻译 <span class="mono">adapt</span> 在 <span class="mono">pydantic_prompt.py</span>（<span class="mono">TranslateStatements</span> / <span class="mono">translate_statements_prompt</span>）与 <span class="mono">prompt/metrics/base_prompt.py</span>（<span class="mono">_translate_strings</span>），批量入口 <span class="mono">PromptMixin.adapt_prompts</span> 在 <span class="mono">prompt/mixin.py</span>。多模态在 <span class="mono">prompt/multi_modal_prompt.py</span>（<span class="mono">ImageTextPrompt</span> / <span class="mono">ImageTextPromptValue</span>）。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>动态 few-shot 用 embedding 选最相关示例</strong>：例题随输入变化，比固定例题更贴题（依赖 embedding，<a href="22-embedding-abstraction.html">第 22 课</a>）。</li>
+    <li><strong>没 embedding 也能用</strong>：Simple 栈退回"最近 N 条"，优雅降级而不报错。</li>
+    <li><strong>adapt 让 prompt 跨语言迁移不重写</strong>：翻译 examples 并强制条数一致，结构零改动。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>静态 few-shot 是写死的 <span class="mono">examples</span>；动态 few-shot 用 embedding 按输入挑 top-k（默认阈值 0.7）。</li>
+    <li>两套栈各有动态版：<span class="inline">FewShotPydanticPrompt</span> + <span class="mono">InMemoryExampleStore</span>（经典）/ <span class="inline">DynamicFewShotPrompt</span> + <span class="mono">SimpleInMemoryExampleStore</span>（Simple）。</li>
+    <li><span class="inline">adapt()</span> 把 examples 整批翻译、条数不变，prompt 跨语言迁移不用重写；多模态有 <span class="mono">ImageTextPrompt</span>。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="19-prompt-system.html"><div class="dir">← 上一课</div><div class="ttl">Prompt 系统：PydanticPrompt</div></a><a class="next" href="21-llm-abstraction.html"><div class="dir">下一课 →</div><div class="ttl">LLM 抽象</div></a></div>
 </div>

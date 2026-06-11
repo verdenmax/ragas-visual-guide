@@ -267,9 +267,83 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>执行引擎 Executor</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+一次评测往往要跑成百上千次 LLM 调用。<strong>Executor</strong> 是 ragas 的"<strong>阅卷调度中心</strong>"：并发跑、谁卡住超时跳过、单题出错记零分不拖累整体、还能中途叫停；而 <span class="inline">RunConfig</span> 是这套并发与容错的<strong>总开关</strong>。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  想象一个<strong>阅卷调度中心</strong>：多位老师<strong>并发</strong>改卷；某份卷子改太久就<strong>超时跳过</strong>；某份算错了不至于让整轮作废，而是<strong>记零分</strong>继续；中途还能<strong>喊停</strong>全场。最关键的是——不管谁先改完，<strong>最后成绩单要按学号原序排列</strong>，不能乱。
+</div>
+
+<h2>保序并发：包装时记下索引</h2>
+<p>并发执行后结果是乱序到达的。Executor 在 <span class="inline">submit</span> 时给每个任务编号，用 <span class="inline">wrap_callable_with_index(callable, counter)</span> 把返回值包成 <span class="mono">(counter, result)</span>；收齐后按索引排序再剥掉编号，于是<strong>输出顺序 == 提交顺序</strong>：</p>
+<pre class="code"><span class="kw">def</span> <span class="fn">wrap_callable_with_index</span>(callable, counter):
+    <span class="kw">async def</span> <span class="fn">wrapped</span>(*args, **kwargs):
+        <span class="kw">try</span>:
+            result = <span class="kw">await</span> callable(*args, **kwargs)
+            <span class="kw">return</span> (counter, result)
+        <span class="kw">except</span> Exception <span class="kw">as</span> e:
+            <span class="kw">if</span> self.raise_exceptions:
+                <span class="kw">raise</span> e
+            <span class="cm"># 不抛异常时：记日志，单题结果填 np.nan</span>
+            <span class="kw">return</span> (counter, np.nan)
+    <span class="kw">return</span> wrapped
+
+<span class="cm"># aresults：sorted(results, key=lambda x: x[0]) 后剥掉索引 → 原序还原</span></pre>
+<p>单个任务失败时（默认 <span class="mono">raise_exceptions=False</span>）填 <span class="inline">np.nan</span> 而不是炸掉整轮——某一格分数缺失，整张成绩单照样产出。</p>
+
+<h2>RunConfig：并发 / 超时 / 重试的总开关</h2>
+<p>Executor 的行为由一个 <span class="inline">RunConfig</span> 收口。<strong>实测默认值</strong>（<span class="mono">run_config.py</span>）：</p>
+<table class="t">
+  <tr><th>字段</th><th>默认值</th><th>含义</th></tr>
+  <tr><td class="mono">timeout</td><td class="mono">180</td><td>单任务超时（秒）</td></tr>
+  <tr><td class="mono">max_retries</td><td class="mono">10</td><td>最大重试次数</td></tr>
+  <tr><td class="mono">max_wait</td><td class="mono">60</td><td>重试退避上限（秒）</td></tr>
+  <tr><td class="mono">max_workers</td><td class="mono">16</td><td>最大并发数</td></tr>
+  <tr><td class="mono">exception_types</td><td class="mono">(Exception,)</td><td>哪些异常触发重试</td></tr>
+  <tr><td class="mono">log_tenacity</td><td class="mono">False</td><td>是否打印重试日志</td></tr>
+  <tr><td class="mono">seed</td><td class="mono">42</td><td>随机种子</td></tr>
+</table>
+<p>重试由 <strong>tenacity</strong> 实现：<span class="inline">add_retry</span> / <span class="inline">add_async_retry</span> 组装 <span class="mono">wait_random_exponential(multiplier=1, max=max_wait)</span> + <span class="mono">stop_after_attempt(max_retries)</span> + <span class="mono">reraise=True</span>——指数退避加随机抖动，重试到上限仍失败就抛出。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 中途叫停与一次性批处理 <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 cancel 怎么停</div>
+      <div class="a">Executor 持有一个 <span class="mono">_cancel_event = threading.Event()</span>。<span class="inline">cancel()</span> 置位、<span class="inline">is_cancelled()</span> 查询；<span class="mono">_process_jobs</span> 在调度循环里检查这个事件，置位后不再派发新任务，实现"喊停全场"。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ run_async_batch</div>
+      <div class="a">便捷函数 <span class="inline">run_async_batch(desc, func, kwargs_list, batch_size)</span> 内部建一个 <span class="mono">RunConfig()</span> + <span class="mono">Executor(raise_exceptions=True)</span>，把一批同构调用并发跑完。注意它<strong>默认抛异常</strong>，适合"要么全成、要么报错"的批处理场景。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  调度核心在 <span class="mono">src/ragas/executor.py</span>：dataclass <span class="mono">Executor</span>（<span class="mono">desc</span> / <span class="mono">show_progress</span> / <span class="mono">raise_exceptions=False</span> / <span class="mono">batch_size</span> / <span class="mono">run_config</span> / <span class="mono">_cancel_event</span>），方法 <span class="mono">submit</span>、<span class="mono">wrap_callable_with_index</span>、<span class="mono">_process_jobs</span>、<span class="mono">results</span> / <span class="mono">aresults</span>（<span class="mono">sorted(..., key=lambda x: x[0])</span> 保序）、<span class="mono">cancel</span> / <span class="mono">is_cancelled</span>，以及便捷函数 <span class="mono">run_async_batch</span>。配置在 <span class="mono">src/ragas/run_config.py</span>：<span class="mono">RunConfig</span>（默认 <span class="mono">timeout=180</span> / <span class="mono">max_retries=10</span> / <span class="mono">max_wait=60</span> / <span class="mono">max_workers=16</span> / <span class="mono">seed=42</span>）与 <span class="mono">add_retry</span> / <span class="mono">add_async_retry</span>（tenacity 退避重试）。失败填 <span class="mono">np.nan</span> 的逻辑在 <span class="mono">wrap_callable_with_index</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>包装时捕获索引</strong>：并发乱序执行、结果按原序重排，调用方无感。</li>
+    <li><strong>单任务失败转 <span class="mono">np.nan</span></strong>：一题翻车不拖垮整轮评测，鲁棒性拉满（默认 <span class="mono">raise_exceptions=False</span>）。</li>
+    <li><strong>RunConfig 收敛配置</strong>：把并发 / 超时 / 重试 / 种子统一成一个对象，配一处、处处生效。</li>
+    <li><strong>tenacity 指数退避</strong>：重试带随机抖动，避免一窝蜂重试压垮上游。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>Executor 用 <span class="mono">wrap_callable_with_index</span> 保序、用 <span class="mono">np.nan</span> 容错、用 <span class="mono">_cancel_event</span> 叫停。</li>
+    <li><span class="inline">RunConfig</span> 是并发与容错的总开关，默认 <span class="mono">timeout=180 / max_retries=10 / max_wait=60 / max_workers=16 / seed=42</span>。</li>
+    <li>重试基于 tenacity（指数退避 + 抖动 + reraise）；评测的并发与容错都在这一层（呼应 <a href="03-evaluation-lifecycle.html">第 3 课</a> 的评测生命周期）。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="22-embedding-abstraction.html"><div class="dir">← 上一课</div><div class="ttl">Embedding 抽象</div></a><a class="next" href="24-callbacks-cost-cache.html"><div class="dir">下一课 →</div><div class="ttl">Callbacks · 成本 · 缓存</div></a></div>
 </div>

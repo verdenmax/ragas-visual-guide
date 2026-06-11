@@ -267,9 +267,92 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>Prompt 系统：PydanticPrompt</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+指标要让 LLM 当裁判，就得先递给它一张<strong>结构化的考卷</strong>。经典指标用 <span class="inline">PydanticPrompt</span> 把"指令 + 输出格式 + 例题 + 输入"拼成考卷，还自带解析与纠错；现代 collections 指标改用一张<strong>更薄</strong>的 <span class="inline">BasePrompt</span>，把解析和修复全交给 instructor。本课看清这套 Prompt 系统的两代写法。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  <span class="inline">PydanticPrompt</span> 像一张<strong>带标准答题格式的考卷</strong>：印着题面（instruction）、必须遵守的答题格式（输出的 JSON schema）、几道例题（few-shot），最后才是这次的题目（输入）。考生（LLM）答完，<strong>阅卷机先按格式核对</strong>——格式不对就把卷子<strong>退回去让它照格式重填</strong>，直到合格或用完重试次数。
+</div>
+
+<h2>经典栈：PydanticPrompt 怎么拼出一张考卷</h2>
+<p><span class="inline">PydanticPrompt[InputModel, OutputModel]</span> 用四个类属性定义一张考卷——输入模型、输出模型、指令、例题：</p>
+<pre class="code"><span class="kw">class</span> <span class="fn">StatementGeneratorPrompt</span>(
+        PydanticPrompt[StatementGeneratorInput, StatementGeneratorOutput]):
+    instruction  = <span class="st">"把回答拆成一条条不含代词、可独立理解的原子陈述。"</span>
+    input_model  = StatementGeneratorInput      <span class="cm"># 输入字段（pydantic）</span>
+    output_model = StatementGeneratorOutput      <span class="cm"># 输出字段（pydantic）</span>
+    examples = [                                 <span class="cm"># few-shot 例题（可选）</span>
+        (StatementGeneratorInput(question=<span class="st">"…"</span>, answer=<span class="st">"…"</span>),
+         StatementGeneratorOutput(statements=[<span class="st">"…"</span>, <span class="st">"…"</span>])),
+    ]</pre>
+<p><span class="inline">to_string(data)</span> 再把它们拼成喂给 LLM 的最终文本，其中<strong>输出签名</strong>由 <span class="inline">output_model.model_json_schema()</span> 生成——这是对格式的强约束：</p>
+<pre class="code">prompt_str = prompt.to_string(data)
+<span class="cm"># = 指令 instruction</span>
+<span class="cm"># + 输出签名：output_model.model_json_schema() 转成的 JSON schema（强约束格式）</span>
+<span class="cm"># + few-shot 例题（_generate_examples）</span>
+<span class="cm"># + "Now perform the same with the following input"</span>
+<span class="cm"># + 这次的输入 data（model_dump_json）+ "Output: "</span></pre>
+
+<h2>生成 → 解析 → 自我修复</h2>
+<p><span class="inline">generate</span> 是 <span class="inline">generate_multiple(n=1)</span> 的特例。整条链路是"拼考卷 → LLM 出 JSON → 解析校验 → 失败重填"：</p>
+<pre class="code">output = <span class="kw">await</span> prompt.generate(llm=llm, data=data)   <span class="cm"># 返回 output_model 实例</span>
+<span class="cm"># 内部三步：</span>
+<span class="cm">#   ① to_string(data) 拼考卷 → 交给 LLM 出 JSON 文本</span>
+<span class="cm">#   ② RagasOutputParser 抽 JSON、校验成 output_model</span>
+<span class="cm">#   ③ 解析失败 → FixOutputFormat 把坏输出退回 LLM 重填（retries_left 默认 3）</span>
+<span class="cm">#      仍失败 → 抛 RagasOutputParserException</span></pre>
+<p>两个可重写钩子 <span class="inline">process_input</span> / <span class="inline">process_output</span> 默认原样返回，子类可在送进 / 取出 LLM 时加工（如 <span class="mono">TranslateStatements</span> 校验翻译条数，<a href="20-prompt-advanced.html">第 20 课</a>）。<span class="inline">generate</span> 还兼容三种 LLM：langchain、instructor、<span class="mono">BaseRagasLLM</span>（<a href="21-llm-abstraction.html">第 21 课</a>）。</p>
+
+<h2>PromptMixin：让 prompt 成为一等公民</h2>
+<p>经典指标都混入了 <span class="inline">PromptMixin</span>。它靠 <span class="inline">inspect.getmembers</span> 自动发现实例上所有 <span class="mono">PydanticPrompt</span>，于是 prompt 能被<strong>发现、整张替换、翻译、存盘复用</strong>：</p>
+<table class="t">
+  <tr><th>方法</th><th>作用</th></tr>
+  <tr><td class="mono">get_prompts()</td><td>列出该指标的所有 prompt（按 name）</td></tr>
+  <tr><td class="mono">set_prompts(**p)</td><td>整张替换（非 PydanticPrompt 直接 ValueError）</td></tr>
+  <tr><td class="mono">adapt_prompts(lang, llm)</td><td>把全部 prompt 翻译成另一种语言（<a href="20-prompt-advanced.html">第 20 课</a>）</td></tr>
+  <tr><td class="mono">save_prompts / load_prompts</td><td>存成 <span class="mono">{name}_{language}.json</span> 再加载</td></tr>
+</table>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 两个同名 BasePrompt，别认错 <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 prompt/base.py vs prompt/metrics/base_prompt.py</div>
+      <div class="a">仓库里有<strong>两个都叫 BasePrompt</strong> 的类：① <span class="mono">prompt/base.py:BasePrompt(ABC)</span>——经典基类，定义<strong>抽象的</strong> <span class="mono">generate</span> / <span class="mono">generate_multiple</span>，<span class="inline">PydanticPrompt</span> 与 <span class="inline">StringPrompt</span> 都继承它，<strong>自己负责</strong>调 LLM 与解析；② <span class="mono">prompt/metrics/base_prompt.py:BasePrompt(ABC, Generic[InputModel, OutputModel])</span>——现代 collections 指标专用的<strong>更薄</strong>基类，只有 <span class="mono">to_string</span> / <span class="mono">_generate_examples</span> / <span class="mono">adapt</span>，<strong>没有</strong> <span class="mono">generate</span>。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 现代栈为什么更薄</div>
+      <div class="a">因为 instructor 直接把 LLM 输出校验成 pydantic 对象（<a href="21-llm-abstraction.html">第 21 课</a>），<strong>格式约束与重试由 instructor 兜底</strong>，prompt 对象只需"把考卷拼成字符串"。所以 collections 的 <span class="mono">util.py</span> 里只写 <span class="mono">to_string</span>，再 <span class="mono">await llm.agenerate(prompt_str, OutputModel)</span>（<a href="15-faithfulness-internals.html">第 15 课</a> Faithfulness 即如此）。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  经典栈在 <span class="mono">src/ragas/prompt/pydantic_prompt.py</span>：<span class="mono">PydanticPrompt</span>（<span class="mono">to_string</span> / <span class="mono">_generate_output_signature</span> / <span class="mono">_generate_examples</span>、<span class="mono">generate</span> / <span class="mono">generate_multiple</span>、<span class="mono">process_input</span> / <span class="mono">process_output</span>、<span class="mono">adapt</span>），解析器 <span class="mono">RagasOutputParser</span> 与自修复 <span class="mono">FixOutputFormat</span>（输出模型 <span class="mono">StringIO</span>），翻译用 <span class="mono">translate_statements_prompt</span>（<span class="mono">TranslateStatements</span>）。基类与字符串版在 <span class="mono">prompt/base.py</span>（<span class="mono">BasePrompt</span> / <span class="mono">StringPrompt</span> / <span class="mono">StringIO</span> / <span class="mono">BoolIO</span>），prompt 发现与替换在 <span class="mono">prompt/mixin.py</span>（<span class="mono">PromptMixin</span>）。现代更薄的 <span class="mono">BasePrompt</span> 在 <span class="mono">prompt/metrics/base_prompt.py</span>，被 <span class="mono">metrics/collections/*/util.py</span> 继承、配 <span class="mono">InstructorBaseRagasLLM.agenerate</span> 使用（<a href="13-metric-base.html">第 13 课</a>、<a href="15-faithfulness-internals.html">第 15 课</a>）。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>输出签名来自 model_json_schema()</strong>：把"答题格式"变成机器可校验的<strong>强约束</strong>，而不是口头叮嘱。</li>
+    <li><strong>FixOutputFormat 自我修复</strong>：LLM 偶尔吐坏 JSON 也能退回重填，鲁棒性藏在解析器里。</li>
+    <li><strong>PromptMixin 让 prompt 成一等公民</strong>：可发现、可整张替换、可翻译、可存盘——评测标准也能版本化。</li>
+    <li><strong>现代栈做减法</strong>：把解析 / 修复交给 instructor，prompt 退化成"只拼字符串"，更简单更薄。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>经典指标站 <span class="inline">PydanticPrompt</span>：<span class="mono">to_string</span> 拼"指令 + JSON schema 输出签名 + few-shot + 输入"，<span class="mono">generate</span> 自带 <span class="mono">RagasOutputParser</span> 解析与 <span class="mono">FixOutputFormat</span> 自修复。</li>
+    <li><span class="inline">PromptMixin</span> 让经典 prompt 可发现 / 可替换 / 可翻译 / 可存盘。</li>
+    <li>现代 collections 指标站更薄的 <span class="mono">prompt/metrics/base_prompt.py:BasePrompt</span>（只有 <span class="mono">to_string</span>），解析与修复交给 instructor（<a href="21-llm-abstraction.html">第 21 课</a>）。</li>
+    <li>别把两个同名 <span class="mono">BasePrompt</span> 搞混：一个在 <span class="mono">prompt/base.py</span>（带 generate），一个在 <span class="mono">prompt/metrics/base_prompt.py</span>（只 to_string）。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="18-agent-metrics-internals.html"><div class="dir">← 上一课</div><div class="ttl">Agent / 多轮指标内部</div></a><a class="next" href="20-prompt-advanced.html"><div class="dir">下一课 →</div><div class="ttl">Prompt 进阶：few-shot 与翻译</div></a></div>
 </div>
