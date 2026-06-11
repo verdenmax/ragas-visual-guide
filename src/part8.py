@@ -46,6 +46,7 @@ eval_dataset = testset.to_evaluation_dataset()
 
 <span class="cm"># ④ 选指标：现代 collections 路径，注入裁判 LLM / embeddings（第 10 课）</span>
 faith = Faithfulness(llm=eval_llm)
+cprec = ContextPrecision(llm=eval_llm)
 crec  = ContextRecall(llm=eval_llm)
 arel  = AnswerRelevancy(llm=eval_llm, embeddings=emb)
 
@@ -54,11 +55,12 @@ arel  = AnswerRelevancy(llm=eval_llm, embeddings=emb)
 <span class="kw">async def</span> <span class="fn">run_eval</span>(row):
     answer, contexts = my_rag(row[<span class="st">"user_input"</span>])          <span class="cm"># 你的 RAG：检索 + 生成（占位）</span>
     f = <span class="kw">await</span> faith.ascore(user_input=row[<span class="st">"user_input"</span>], response=answer, retrieved_contexts=contexts)
+    p = <span class="kw">await</span> cprec.ascore(user_input=row[<span class="st">"user_input"</span>], reference=row[<span class="st">"reference"</span>], retrieved_contexts=contexts)
     c = <span class="kw">await</span> crec.ascore(user_input=row[<span class="st">"user_input"</span>], retrieved_contexts=contexts, reference=row[<span class="st">"reference"</span>])
     a = <span class="kw">await</span> arel.ascore(user_input=row[<span class="st">"user_input"</span>], response=answer)
     <span class="kw">return</span> {**row, <span class="st">"response"</span>: answer,
-            <span class="st">"faithfulness"</span>: f.value, <span class="st">"context_recall"</span>: c.value,
-            <span class="st">"answer_relevancy"</span>: a.value}          <span class="cm"># 这一行会被落盘留痕</span>
+            <span class="st">"faithfulness"</span>: f.value, <span class="st">"context_precision"</span>: p.value,
+            <span class="st">"context_recall"</span>: c.value, <span class="st">"answer_relevancy"</span>: a.value}          <span class="cm"># 这一行会被落盘留痕</span>
 
 <span class="cm"># golden：把测试集的"问题 + 标准答案"放进带 backend 的 ragas Dataset（第 6、8 课）</span>
 v1 = <span class="kw">await</span> run_eval.arun(golden, name=<span class="st">"v1-baseline"</span>)    <span class="cm"># 并发跑、自动落盘</span>
