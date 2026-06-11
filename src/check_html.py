@@ -12,7 +12,7 @@ printed but do not fail the build. Checks performed on every lesson + index:
 * no unescaped '<' inside <pre> code blocks (would eat content)
 * no out-of-range "第 N 课" cross-references
 * nav prev/next chain matches shell.PAGES order
-* no stale counts / wording (e.g. "全 20 课", "六个钩子")
+* no stale counts / wording (e.g. "全 27 课", "LangChain 图解教程")
 * index TOC lists every page and shows the correct lesson/part counts
 * (WARN only) every lesson has a "本课要点" and a "card analogy"
 """

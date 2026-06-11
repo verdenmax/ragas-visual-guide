@@ -1,4 +1,4 @@
-"""Build a single print-ready HTML (all 20 lessons, accordions expanded).
+"""Build a single print-ready HTML (all lessons, accordions expanded).
 
 Output: ``print.html`` at the project root. Render it to PDF with headless
 Chromium, e.g.:
@@ -97,7 +97,7 @@ def build_print():
 <style>{shell.CSS}{PRINT_CSS}</style>
 </head><body>
 <section class="print-cover">
-  <div class="emoji">📘</div>
+  <div class="emoji">📊</div>
   <h1>Ragas 图解教程</h1>
   <div class="sub">从零理解整个 ragas · 宏观 → 用法 → 源码内部 → 测试生成 → 实战</div>
   <div class="meta">共 {len(shell.PAGES)} 课 · {len({p[2] for p in shell.PAGES})} 个部分 · 每课配真实代码对应与设计亮点<br>
