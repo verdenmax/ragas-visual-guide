@@ -522,9 +522,9 @@ cd /home/verden/course/ragas-visual-guide && git add -A && git commit -m "conten
   - 锚点：`dataset_schema.py`（`MultiTurnSample` 的 `field_validator`、`to_messages`、`pretty_repr`、`reference_tool_calls`/`reference_topics`）、`messages.py`（`Message`/`HumanMessage`/`AIMessage`/`ToolMessage`/`ToolCall`）。
   - 类比：多轮样本像"一段聊天记录 + 工具调用小票"。
   - 小节：五类消息；`MultiTurnSample.user_input` 是消息列表；`field_validator` 强制 tool-call/message 合法顺序；这是 Agent/多轮评测的数据基础（呼应第 18 课）。
-  - 💡 设计亮点：结构化消息 + `tool_call_id` 配对；在**数据层**就用 validator 保证消息序合法，错误前移。
+  - 💡 设计亮点：结构化消息（`AIMessage.tool_calls` 里的 `ToolCall` 与随后的 `ToolMessage` 按**顺序**配对，ragas 消息无 `tool_call_id` 字段）；在**数据层**就用 validator 保证消息序合法，错误前移。
   - ✅ 要点：单轮 vs 多轮样本的差异；消息是 Agent 评测的载体。
-  - 测验点：`field_validator` 防止了什么非法数据？`ToolMessage` 靠什么和请求配对？
+  - 测验点：`field_validator` 防止了什么非法数据？`ToolMessage` 如何与 `AIMessage` 的工具调用配对（按顺序）？
 
 - [ ] **Step 3: 第 6 课「两个 Dataset 之辨」(`06-two-datasets.html`)**
   - 锚点：`dataset.py`（`DataTable`、`Dataset`、`_resolve_backend`、`DATATABLE_TYPE`）对比 `dataset_schema.py`（`EvaluationDataset`、`RagasDataset`）。
