@@ -267,9 +267,92 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>CLI</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+不想写 Python 也能用 ragas——装好包就多了个 <span class="mono">ragas</span> 命令。它用 <strong>typer</strong> 搭命令、<strong>rich</strong> 画彩色表格，
+三条子命令覆盖<strong>"跑评测 / 拉模板 / 看示例"</strong>。这是除了写代码之外的<strong>另一条上手路径</strong>。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  CLI 是 ragas 的<strong>"命令行遥控器"</strong>：不用进代码里按按钮，在终端敲一行就能<strong>跑评测</strong>、<strong>拉一套现成模板</strong>、<strong>生成一个能跑的最小示例</strong>。
+  <span class="inline">typer</span> 是遥控器的<strong>按键面板</strong>（声明式定义命令），<span class="inline">rich</span> 是它的<strong>小屏幕</strong>（彩色表格、进度动画）。
+</div>
+
+<h2>ragas 命令从哪来</h2>
+<p><span class="mono">pyproject.toml</span> 的 <span class="mono">[project.scripts]</span> 注册了一行入口，装包后系统就有了 <span class="mono">ragas</span> 可执行命令；它指向 <span class="mono">cli.py</span> 里的 <span class="inline">app</span>：</p>
+<pre class="code"><span class="cm"># pyproject.toml</span>
+[project.scripts]
+ragas = <span class="st">"ragas.cli:app"</span>
+
+<span class="cm"># src/ragas/cli.py（精简）</span>
+<span class="kw">import</span> typer
+<span class="kw">from</span> ragas.utils <span class="kw">import</span> console      <span class="cm"># 一个 rich Console</span>
+
+app = typer.Typer(help=<span class="st">"Ragas CLI for running LLM evaluations"</span>)
+
+@app.command()
+<span class="kw">def</span> <span class="fn">evals</span>(...): ...
+@app.command()
+<span class="kw">def</span> <span class="fn">quickstart</span>(...): ...
+@app.command()
+<span class="kw">def</span> <span class="fn">hello_world</span>(...): ...</pre>
+
+<h2>三条子命令</h2>
+<table class="t">
+  <tr><th>命令</th><th>干什么</th></tr>
+  <tr><td class="mono">ragas quickstart [模板]</td><td>拉一套<strong>完整示例工程</strong>；不带参数则列出所有模板（<span class="mono">rag_eval</span> / <span class="mono">agent_evals</span> / <span class="mono">text2sql</span> / <span class="mono">improve_rag</span> …），<span class="mono">-o</span> 指定目录。本地有 <span class="mono">ragas_examples</span> 就复制，没有就从 GitHub 下载。</td></tr>
+  <tr><td class="mono">ragas evals 文件.py --dataset 名 --metrics 字段</td><td>跑一个<strong>评测模块</strong>：加载该文件，找出 Project（有 <span class="mono">get_dataset</span> / <span class="mono">get_experiment</span>）和实验函数（有 <span class="mono">run_async</span>），对数据集跑实验，用 rich 表格打印各指标；<span class="mono">--baseline</span> 可与基线对比。</td></tr>
+  <tr><td class="mono">ragas hello_world [目录]</td><td>生成<strong>最小可跑示例</strong>：建 <span class="mono">hello_world/</span>（<span class="mono">datasets/</span>、<span class="mono">experiments/</span>、<span class="mono">evals.py</span> + <span class="mono">test_data.csv</span>），照提示就能 <span class="mono">ragas evals</span> 起来。</td></tr>
+</table>
+
+<h2>evals 跑完打印什么</h2>
+<p><span class="inline">evals</span> 调 <span class="inline">run_experiments</span>，先用 <span class="inline">separate_metrics_by_type</span> 把指标分成<strong>数值 / 分类</strong>两类，再交给 <span class="inline">display_metrics_tables</span> 调 <span class="inline">create_numerical_metrics_table</span> / <span class="inline">create_categorical_metrics_table</span> 打印。
+带 <span class="mono">--baseline</span> 时，数值表会多出 <strong>Current / Baseline / Delta（▲▼）/ Gate（pass·fail）</strong> 几列，门禁允许小于 <span class="mono">0.01</span> 的轻微回退：</p>
+<pre class="code"><span class="cm"># 对 test_data 数据集、按 accuracy 指标评测 evals.py（hello_world 生成的就长这样）</span>
+ragas evals hello_world/evals.py --dataset test_data --metrics accuracy
+
+<span class="cm"># 与基线实验对比，输出带 Delta 和 pass/fail 门禁</span>
+ragas evals my_eval.py --dataset qa --metrics correctness --baseline v1</pre>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> sdk.py 是干嘛的？quickstart 为什么要"拉模板"？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 sdk.py 目前是空的</div>
+      <div class="a"><span class="mono">src/ragas/sdk.py</span> 这个文件<strong>存在但零行内容</strong>，是预留占位（未来可能放程序化 SDK 入口）。本课不依赖它——CLI 的逻辑<strong>全在 <span class="mono">cli.py</span></strong>。
+        这里如实标注，免得讲一个还不存在的能力。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 模板降低上手门槛</div>
+      <div class="a"><span class="inline">quickstart</span> 不是从零教学，而是直接 clone 一套<strong>能跑的工程</strong>（如 <span class="mono">rag_eval</span>：带数据、指标、实验脚本），改改就能用。
+        它与 <span class="inline">hello_world</span> 的"最小骨架"<strong>互补</strong>：一个给完整范例、一个给最小起点。两者都把"第一次怎么跑起来"这道坎抹平了。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  <span class="mono">src/ragas/cli.py</span>：<span class="mono">app = typer.Typer(...)</span>，命令 <span class="mono">evals</span> / <span class="mono">quickstart</span> / <span class="mono">hello_world</span>（<span class="mono">@app.command()</span>），表格助手 <span class="mono">create_numerical_metrics_table</span> / <span class="mono">create_categorical_metrics_table</span> / <span class="mono">separate_metrics_by_type</span> / <span class="mono">display_metrics_tables</span>，模块加载 <span class="mono">load_eval_module</span>、跑实验 <span class="mono">run_experiments</span>，输出走 <span class="mono">ragas.utils.console</span>（rich）。
+  入口注册在 <span class="mono">pyproject.toml</span> 的 <span class="mono">[project.scripts] ragas = "ragas.cli:app"</span>。<span class="mono">src/ragas/sdk.py</span> 当前为空占位。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>typer + rich</strong>：声明式定义命令 + 彩色表格 / 进度动画，CLI 体验好、代码也短。</li>
+    <li><strong>quickstart 模板</strong>（本地复制或 GitHub 下载）大幅<strong>降低上手门槛</strong>，配 <span class="inline">hello_world</span> 最小骨架双管齐下。</li>
+    <li><strong>evals 复用实验系统</strong>（<span class="mono">get_dataset</span> / <span class="mono">run_async</span>）与门禁（Delta / pass-fail），把"跑评测、对比基线"搬到一行命令。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li><span class="mono">ragas</span> 命令（<span class="mono">pyproject [project.scripts]</span> → <span class="mono">cli.py</span> 的 typer <span class="inline">app</span>）是<strong>另一条上手路径</strong>，不写代码也能评测。</li>
+    <li>三条命令：<span class="inline">quickstart</span> 拉模板、<span class="inline">evals</span> 跑评测 + rich 表格（带基线门禁）、<span class="inline">hello_world</span> 造最小示例。</li>
+    <li><span class="mono">sdk.py</span> 目前为<strong>空占位</strong>；CLI 能力全在 <span class="mono">cli.py</span>。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="36-source-debug-contribute.html"><div class="dir">← 上一课</div><div class="ttl">读源码 · 调试 · 测试 · 贡献</div></a><a class="next" href="38-capstone.html"><div class="dir">下一课 →</div><div class="ttl">端到端实战</div></a></div>
 </div>

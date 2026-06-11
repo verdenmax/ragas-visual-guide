@@ -388,19 +388,280 @@ testset = generator.generate_with_langchain_docs(docs, testset_size=10)   <span 
 """
 
 LESSON_35 = r"""
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+上一课把别的框架接进来评测；本课把<strong>评测过程本身</strong>接到"监控大盘"。<span class="mono">integrations/tracing/</span> 加上几个观测平台适配，
+让每一次评测都能<strong>可视化、可回溯</strong>——光看最后那个分数不够，你还想知道<strong>每一步</strong>发生了什么。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  只看评测的最终分数，像只看体检报告的<strong>总分</strong>——不知道哪项拖了后腿。观测平台是<strong>"监控大盘 + 行车记录仪"</strong>：
+  把每一次 LLM 调用、每一行打分、耗时与成本都录下来，出了问题能<strong>回放到具体那一步</strong>。
+  ragas 给 Langfuse / MLflow / LangSmith / Helicone / Opik 各配了一个<strong>"上报插头"</strong>，评测结果顺着插头进大盘。
+</div>
+
+<h2>五家观测平台（确实存在的）</h2>
+<p>下面是 <span class="mono">integrations/</span> 里<strong>真实存在</strong>的观测 / 追踪适配，只列这五家，不臆造：</p>
+<table class="t">
+  <tr><th>平台</th><th>子模块</th><th>接入方式（公开符号）</th></tr>
+  <tr><td><strong>Langfuse</strong></td><td class="mono">integrations/tracing/langfuse.py</td><td><span class="mono">observe</span> 装饰器 + <span class="mono">sync_trace()</span> → <span class="mono">LangfuseTrace.get_url()</span></td></tr>
+  <tr><td><strong>MLflow</strong></td><td class="mono">integrations/tracing/mlflow.py</td><td><span class="mono">sync_trace()</span> → <span class="mono">MLflowTrace.get_url()</span>（读 <span class="mono">MLFLOW_HOST</span>）</td></tr>
+  <tr><td><strong>LangSmith</strong></td><td class="mono">integrations/langsmith.py</td><td><span class="mono">upload_dataset</span> / <span class="mono">evaluate</span>（用 <span class="mono">EvaluatorChain</span> 把指标包成 evaluator）</td></tr>
+  <tr><td><strong>Helicone</strong></td><td class="mono">integrations/helicone.py</td><td><span class="mono">helicone_config</span> 单例（被 <span class="mono">evaluation.py</span> 引用）</td></tr>
+  <tr><td><strong>Opik</strong></td><td class="mono">integrations/opik.py</td><td><span class="mono">OpikTracer</span>（LangChain 回调，回传逐行分数）</td></tr>
+</table>
+<p>接法分三路：<strong>trace 录全链路</strong>（Langfuse / MLflow）、<strong>请求头归 session</strong>（Helicone，零改动）、<strong>LangChain 回调 / evaluator</strong>（Opik / LangSmith）。</p>
+
+<h2>observe：给评测装"行车记录仪"</h2>
+<p>Langfuse / MLflow 走的是 <strong>trace</strong>：把整次评测包成一条可追踪的链路，跑完再去服务器把它捞回来、拿到大盘上的可点链接。</p>
+<pre class="code"><span class="kw">from</span> ragas.integrations.tracing.langfuse <span class="kw">import</span> observe, sync_trace
+<span class="kw">from</span> ragas <span class="kw">import</span> evaluate
+
+@observe()                        <span class="cm"># 把整次评测包成一条 trace</span>
+<span class="kw">def</span> <span class="fn">run_evaluation</span>():
+    <span class="kw">return</span> evaluate(dataset, metrics)
+
+run_evaluation()
+trace = <span class="kw">await</span> sync_trace()        <span class="cm"># 等 trace 同步到服务器</span>
+print(trace.get_url())            <span class="cm"># 拿到大盘上的可点链接</span></pre>
+<p><span class="mono">tracing/__init__.py</span> 用 <span class="inline">__getattr__</span> <strong>惰性导出</strong> <span class="inline">observe</span> / <span class="inline">sync_trace</span> / <span class="inline">LangfuseTrace</span> / <span class="inline">MLflowTrace</span>；
+MLflow 侧的 <span class="inline">sync_trace</span> 改走 <span class="mono">get_last_active_trace_id</span> + <span class="mono">get_trace</span>，<span class="inline">MLflowTrace.get_url()</span> 用 <span class="mono">MLFLOW_HOST</span> 拼出 trace 链接。两家长得几乎一样，换平台只换 import。</p>
+
+<h2>helicone_config：不改代码就把评测归一个 session</h2>
+<p>Helicone 不靠装饰器，而是<strong>请求头</strong>。<span class="mono">helicone.py</span> 里 <span class="inline">helicone_config</span> 是个<strong>单例</strong>（<span class="inline">HeliconeSingleton</span>，用 <span class="inline">__new__</span> 保证全局唯一）。
+关键是它被 <strong>评测主流程</strong>引用——<span class="mono">evaluation.py</span> 顶部 import 它，经典 <span class="inline">evaluate()</span> 一开头就判断它是否开启：</p>
+<pre class="code"><span class="cm"># evaluate() 内部（精简）：设了 api_key 才生效</span>
+<span class="kw">if</span> helicone_config.is_enabled:
+    helicone_config.session_name = <span class="st">"ragas-evaluation"</span>
+    helicone_config.session_id = str(uuid.uuid4())   <span class="cm"># 每轮评测一个新 session</span></pre>
+<p><span class="inline">default_headers()</span> 把这些拼成 <span class="mono">Helicone-Session-*</span> 等请求头，于是这一轮评测的<strong>所有 LLM 调用</strong>在 Helicone 大盘里被归到<strong>同一个 session</strong>，可整体回看。
+没设 <span class="mono">api_key</span> 时 <span class="inline">is_enabled</span> 为 <span class="inline">False</span>，整段完全无感——<strong>开了才花钱、才上报</strong>。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 这么多观测依赖，会不会拖垮安装？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 可选依赖 + 惰性导入，按家隔离</div>
+      <div class="a">追踪栈在 <span class="mono">pyproject.toml</span> 是<strong>可选 extra</strong>（<span class="mono">tracing = ["langfuse&gt;=3.2.4", "mlflow&gt;=3.1.4"]</span>），不装也能用 ragas。
+        <span class="mono">tracing/__init__.py</span> 用 <span class="inline">__getattr__</span> 惰性导入，<span class="mono">langfuse.py</span> / <span class="mono">mlflow.py</span> 内部 <span class="mono">try/except</span> 设 <span class="mono">LANGFUSE_AVAILABLE</span> / <span class="mono">MLFLOW_AVAILABLE</span>，缺库时退化成 stub 而非崩溃。
+        这与<a href="34-integrations-frameworks.html">上一课</a>框架集成的"惰性导入"一脉相承：<strong>缺哪个平台只影响那一个插头</strong>。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ Opik / LangSmith 这两路怎么接</div>
+      <div class="a"><span class="inline">OpikTracer</span> 是个 <strong>LangChain 回调</strong>（继承 <span class="mono">LangchainOpikTracer</span>）：它认出评测链（<span class="mono">RAGAS_EVALUATION_CHAIN_NAME = "ragas evaluation"</span>）后，把<strong>逐行的指标分数</strong>通过 <span class="mono">log_traces_feedback_scores</span> 回传到 Opik。
+        LangSmith 的 <span class="inline">evaluate</span> 则用 <span class="inline">EvaluatorChain</span>（<a href="34-integrations-frameworks.html">第 34 课</a>）把 ragas 指标变成它的 <span class="mono">custom_evaluators</span>，直接在 LangSmith 平台上跑评测。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  追踪栈在 <span class="mono">src/ragas/integrations/tracing/</span>：<span class="mono">__init__.py</span>（<span class="mono">__getattr__</span> 惰性导出）、<span class="mono">langfuse.py</span>（<span class="mono">observe</span> / <span class="mono">sync_trace</span> / <span class="mono">LangfuseTrace</span>）、<span class="mono">mlflow.py</span>（<span class="mono">MLflowTrace</span> / <span class="mono">sync_trace</span>）。
+  另外三家在 <span class="mono">integrations/</span> 根：<span class="mono">langsmith.py</span>（<span class="mono">upload_dataset</span> / <span class="mono">evaluate</span> / <span class="mono">EvaluatorChain</span>）、<span class="mono">helicone.py</span>（<span class="mono">HeliconeSingleton</span> / <span class="mono">helicone_config</span> / <span class="mono">default_headers</span>，被 <span class="mono">evaluation.py</span> 的 <span class="mono">evaluate</span> 引用）、<span class="mono">opik.py</span>（<span class="mono">OpikTracer</span>，依赖 <span class="mono">RAGAS_EVALUATION_CHAIN_NAME</span>）。
+  可选依赖声明在 <span class="mono">pyproject.toml</span> 的 <span class="mono">[project.optional-dependencies].tracing</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>评测可上报多家观测平台</strong>（Langfuse / MLflow / LangSmith / Helicone / Opik）→ 生产级<strong>可视化与回溯</strong>，不止一个孤零零的分数。</li>
+    <li><strong>三种侵入度任选</strong>：<span class="inline">observe</span> + <span class="inline">sync_trace</span> 录全链路、<span class="inline">helicone_config</span> 零改动归 session、回调 / evaluator 接进现成平台。</li>
+    <li><strong>观测依赖全是可选 extra + 惰性导入</strong>：缺库退化成 stub，不影响核心安装与使用。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>评测结果能进监控体系：Langfuse / MLflow（<span class="inline">observe</span> + <span class="inline">sync_trace</span>）、LangSmith（<span class="inline">EvaluatorChain</span>）、Helicone（session 请求头）、Opik（回调回传分数）。</li>
+    <li><span class="inline">helicone_config</span> 单例被 <span class="inline">evaluate()</span> 引用：开了就给整轮评测<strong>归一个 session</strong>，闭环到生产观测。</li>
+    <li>观测能力都是<strong>可选依赖、惰性加载</strong>，缺库不炸整包。</li>
+  </ul>
+</div>
 """
 
 LESSON_36 = r"""
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+前面把 ragas 的能力讲透了；这一课换个视角——你想<strong>下场改 ragas</strong>，怎么把开发环境搭起来、怎么跑测试还不烧钱、怎么提交。
+一句话：全靠 <strong>uv</strong> 管依赖，加上一个把所有动作一键化的 <strong>Makefile</strong>。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  这是给想动手改 ragas 的人的<strong>"工地安全须知 + 工具说明书"</strong>：<span class="inline">uv</span> 是统一的<strong>建材入场口</strong>（管虚拟环境与依赖），
+  <span class="inline">Makefile</span> 是墙上那排<strong>一键开关</strong>（<span class="mono">format</span> / <span class="mono">type</span> / <span class="mono">test</span> / <span class="mono">run-ci</span>），
+  而 <span class="inline">fake_llm</span> 这类<strong>替身演员</strong>让你彩排时不必请真演员（真 LLM）出场——又快又零成本。
+</div>
+
+<h2>用 uv 装环境（两档）</h2>
+<p>开发环境分两档，都自动建 <span class="mono">.venv</span> 并装好 pre-commit 钩子；<span class="mono">requires-python</span> 是 <span class="mono">&gt;=3.9</span>：</p>
+<pre class="code"><span class="cm"># 推荐：快速最小开发环境（约 79 个包，日常开发够用）</span>
+make install-minimal      <span class="cm"># 内部：uv pip install -e ".[dev-minimal]"</span>
+
+<span class="cm"># 或全量（含 ML / 观测栈，约 383 个包）</span>
+make install              <span class="cm"># 内部：uv sync --group dev</span></pre>
+<p><span class="mono">CONTRIBUTING.md</span> 写得很直白：<strong>用 <span class="mono">make</span> 命令而不是直接调工具</strong>；要直接跑 Python 工具时加 <span class="mono">uv run</span> 前缀。
+项目还用 <strong>uv workspace</strong>（<span class="mono">members = [".", "examples"]</span>）同时管主包和 <span class="mono">ragas-examples</span> 两个包，依赖版本统一。</p>
+
+<h2>日常三连：format / type / test</h2>
+<p>改完代码，提交前的标准动作就这几个开关：</p>
+<table class="t">
+  <tr><th>命令</th><th>干什么</th><th>底层工具</th></tr>
+  <tr><td class="mono">make format</td><td>格式化 + 自动修（含排序 / 删未用 import）</td><td class="mono">ruff format · ruff check --fix（lint 选 E/F/I）</td></tr>
+  <tr><td class="mono">make type</td><td>类型检查（只查 <span class="mono">src/ragas</span>）</td><td class="mono">pyright（typeCheckingMode=basic）</td></tr>
+  <tr><td class="mono">make check</td><td>快速体检 = format + type（不跑测试）</td><td class="mono">上面两个</td></tr>
+  <tr><td class="mono">make test</td><td>跑单测，可 <span class="mono">k=</span> 只跑匹配的</td><td class="mono">pytest tests/unit</td></tr>
+  <tr><td class="mono">make run-ci</td><td>本地完整复刻 GitHub CI</td><td class="mono">ruff --check + type + pytest --nbmake -n auto</td></tr>
+</table>
+<pre class="code">make check                  <span class="cm"># 格式化 + 类型检查</span>
+make test                   <span class="cm"># 跑全部单测</span>
+make test k=<span class="st">"faithfulness"</span>  <span class="cm"># 只跑名字匹配的用例</span>
+make run-ci                 <span class="cm"># 提 PR 前本地复刻一遍 CI</span></pre>
+
+<h2>fake_llm / fake_embedding：让指标测试确定、零成本</h2>
+<p>这是整套测试设计的精髓。<span class="mono">tests/conftest.py</span> 提供几个<strong>"替身" fixture</strong>，让指标 / 引擎测试<strong>不碰真模型</strong>：</p>
+<table class="t">
+  <tr><th>fixture</th><th>替身类</th><th>行为</th></tr>
+  <tr><td class="mono">fake_llm</td><td class="mono">EchoLLM</td><td>把 prompt 原样当回答吐回来，<span class="mono">is_finished</span> 永远 True → 确定、可断言</td></tr>
+  <tr><td class="mono">fake_embedding</td><td class="mono">EchoEmbedding</td><td>返回随机 768 维向量，测维度 / 形状够用</td></tr>
+  <tr><td class="mono">mock_llm</td><td class="mono">MockLLM</td><td><span class="mono">generate</span> 直接返回 response_model 的空实例，专测结构化输出路径</td></tr>
+  <tr><td class="mono">mock_embedding</td><td class="mono">MockEmbedding</td><td><span class="mono">np.random.seed(42)</span> 固定种子 → 可复现</td></tr>
+</table>
+<pre class="code"><span class="cm"># 测试里直接声明 fixture 名，pytest 自动注入（无需真 API key）</span>
+<span class="kw">def</span> <span class="fn">test_my_metric</span>(fake_llm, fake_embedding):
+    metric = MyMetric(llm=fake_llm)
+    <span class="cm"># 断言指标逻辑，而不是断言真模型答得好不好</span>
+    ...</pre>
+<p>于是"指标逻辑对不对"与"LLM 答得好不好"被<strong>解耦</strong>——单测<strong>确定、离线、零调用成本</strong>，CI 不必持有 <span class="mono">OPENAI_API_KEY</span>。
+<span class="mono">tests/</span> 下还分 <span class="mono">unit/</span>（再按 <span class="mono">backends</span> / <span class="mono">integrations</span> / <span class="mono">llms</span> / <span class="mono">prompt</span> 分组）、<span class="mono">e2e/</span>、<span class="mono">benchmarks/</span>。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 为什么所有命令都包一层 make + uv？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 一处定义，人人一致</div>
+      <div class="a">把 ruff / pyright / pytest 的具体参数（排除 <span class="mono">_version.py</span>、<span class="mono">--dist loadfile -n auto</span> 等）<strong>写死在 Makefile</strong>，谁敲 <span class="mono">make run-ci</span> 跑的都和 GitHub CI 完全一样，杜绝"我本地是绿的"。
+        <span class="mono">uv run --active</span> 又保证用的是项目 <span class="mono">.venv</span> 里钉死版本的工具，不被系统环境污染。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ benchmarks 在哪跑</div>
+      <div class="a"><span class="mono">make benchmarks</span> 跑 <span class="mono">tests/benchmarks/</span> 下的 <span class="mono">benchmark_eval.py</span> / <span class="mono">benchmark_testsetgen.py</span>；<span class="mono">make benchmarks-docker</span> 在容器里跑。
+        性能回归也有一键入口。日常流程见 <span class="mono">CONTRIBUTING.md</span>：开分支 → 改代码 → <span class="mono">make check</span> + <span class="mono">make test</span> → 提交，PR 前再 <span class="mono">make run-ci</span>。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  仓库根 <span class="mono">Makefile</span>：<span class="mono">install-minimal</span> / <span class="mono">install</span> / <span class="mono">format</span> / <span class="mono">type</span> / <span class="mono">check</span> / <span class="mono">test</span> / <span class="mono">run-ci</span> / <span class="mono">benchmarks</span> / <span class="mono">clean</span> 等目标（<span class="mono">make help</span> 看全）。
+  <span class="mono">pyproject.toml</span>：<span class="mono">requires-python &gt;=3.9</span>、<span class="mono">[tool.uv.workspace] members = [".", "examples"]</span>、<span class="mono">[tool.ruff]</span>（line 88、select E/F/I）、<span class="mono">[tool.pyright]</span>（basic、include <span class="mono">src/ragas</span>）、<span class="mono">[tool.pytest.ini_options]</span>，以及 <span class="mono">dev-minimal</span> extra 与 <span class="mono">[dependency-groups].dev</span> 两套。
+  <span class="mono">tests/conftest.py</span>：<span class="mono">fake_llm</span> / <span class="mono">fake_embedding</span> / <span class="mono">mock_llm</span> / <span class="mono">mock_embedding</span> fixture（<span class="mono">EchoLLM</span> / <span class="mono">EchoEmbedding</span> / <span class="mono">MockLLM</span> / <span class="mono">MockEmbedding</span>）。流程见 <span class="mono">CONTRIBUTING.md</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><span class="inline">fake_llm</span> / <span class="inline">fake_embedding</span> 让指标测试<strong>确定、离线、零成本</strong>，CI 不需要真 API key。</li>
+    <li><strong>Makefile 把整条 CI 一键化</strong>：<span class="mono">make run-ci</span> 本地即 GitHub CI，参数只定义一处，杜绝环境漂移。</li>
+    <li><strong>uv workspace 管多包</strong>（主包 + <span class="mono">ragas-examples</span>），依赖版本统一、可编辑安装。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>上手开发就用这套工具链：<span class="mono">make install-minimal</span> 装环境，<span class="mono">make format</span> / <span class="mono">type</span> / <span class="mono">test</span> 日常三连，<span class="mono">make run-ci</span> 提 PR 前自检。</li>
+    <li>指标 / 引擎单测靠 <span class="mono">conftest.py</span> 的 <span class="inline">fake_llm</span> / <span class="inline">fake_embedding</span> 跑得<strong>确定又零成本</strong>。</li>
+    <li>一切走 <strong>uv + Makefile</strong>：环境、依赖、CI 全统一，照 <span class="mono">CONTRIBUTING.md</span> 走即可。</li>
+  </ul>
+</div>
 """
 
 LESSON_37 = r"""
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+不想写 Python 也能用 ragas——装好包就多了个 <span class="mono">ragas</span> 命令。它用 <strong>typer</strong> 搭命令、<strong>rich</strong> 画彩色表格，
+三条子命令覆盖<strong>"跑评测 / 拉模板 / 看示例"</strong>。这是除了写代码之外的<strong>另一条上手路径</strong>。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  CLI 是 ragas 的<strong>"命令行遥控器"</strong>：不用进代码里按按钮，在终端敲一行就能<strong>跑评测</strong>、<strong>拉一套现成模板</strong>、<strong>生成一个能跑的最小示例</strong>。
+  <span class="inline">typer</span> 是遥控器的<strong>按键面板</strong>（声明式定义命令），<span class="inline">rich</span> 是它的<strong>小屏幕</strong>（彩色表格、进度动画）。
+</div>
+
+<h2>ragas 命令从哪来</h2>
+<p><span class="mono">pyproject.toml</span> 的 <span class="mono">[project.scripts]</span> 注册了一行入口，装包后系统就有了 <span class="mono">ragas</span> 可执行命令；它指向 <span class="mono">cli.py</span> 里的 <span class="inline">app</span>：</p>
+<pre class="code"><span class="cm"># pyproject.toml</span>
+[project.scripts]
+ragas = <span class="st">"ragas.cli:app"</span>
+
+<span class="cm"># src/ragas/cli.py（精简）</span>
+<span class="kw">import</span> typer
+<span class="kw">from</span> ragas.utils <span class="kw">import</span> console      <span class="cm"># 一个 rich Console</span>
+
+app = typer.Typer(help=<span class="st">"Ragas CLI for running LLM evaluations"</span>)
+
+@app.command()
+<span class="kw">def</span> <span class="fn">evals</span>(...): ...
+@app.command()
+<span class="kw">def</span> <span class="fn">quickstart</span>(...): ...
+@app.command()
+<span class="kw">def</span> <span class="fn">hello_world</span>(...): ...</pre>
+
+<h2>三条子命令</h2>
+<table class="t">
+  <tr><th>命令</th><th>干什么</th></tr>
+  <tr><td class="mono">ragas quickstart [模板]</td><td>拉一套<strong>完整示例工程</strong>；不带参数则列出所有模板（<span class="mono">rag_eval</span> / <span class="mono">agent_evals</span> / <span class="mono">text2sql</span> / <span class="mono">improve_rag</span> …），<span class="mono">-o</span> 指定目录。本地有 <span class="mono">ragas_examples</span> 就复制，没有就从 GitHub 下载。</td></tr>
+  <tr><td class="mono">ragas evals 文件.py --dataset 名 --metrics 字段</td><td>跑一个<strong>评测模块</strong>：加载该文件，找出 Project（有 <span class="mono">get_dataset</span> / <span class="mono">get_experiment</span>）和实验函数（有 <span class="mono">run_async</span>），对数据集跑实验，用 rich 表格打印各指标；<span class="mono">--baseline</span> 可与基线对比。</td></tr>
+  <tr><td class="mono">ragas hello_world [目录]</td><td>生成<strong>最小可跑示例</strong>：建 <span class="mono">hello_world/</span>（<span class="mono">datasets/</span>、<span class="mono">experiments/</span>、<span class="mono">evals.py</span> + <span class="mono">test_data.csv</span>），照提示就能 <span class="mono">ragas evals</span> 起来。</td></tr>
+</table>
+
+<h2>evals 跑完打印什么</h2>
+<p><span class="inline">evals</span> 调 <span class="inline">run_experiments</span>，先用 <span class="inline">separate_metrics_by_type</span> 把指标分成<strong>数值 / 分类</strong>两类，再交给 <span class="inline">display_metrics_tables</span> 调 <span class="inline">create_numerical_metrics_table</span> / <span class="inline">create_categorical_metrics_table</span> 打印。
+带 <span class="mono">--baseline</span> 时，数值表会多出 <strong>Current / Baseline / Delta（▲▼）/ Gate（pass·fail）</strong> 几列，门禁允许小于 <span class="mono">0.01</span> 的轻微回退：</p>
+<pre class="code"><span class="cm"># 对 test_data 数据集、按 accuracy 指标评测 evals.py（hello_world 生成的就长这样）</span>
+ragas evals hello_world/evals.py --dataset test_data --metrics accuracy
+
+<span class="cm"># 与基线实验对比，输出带 Delta 和 pass/fail 门禁</span>
+ragas evals my_eval.py --dataset qa --metrics correctness --baseline v1</pre>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> sdk.py 是干嘛的？quickstart 为什么要"拉模板"？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 sdk.py 目前是空的</div>
+      <div class="a"><span class="mono">src/ragas/sdk.py</span> 这个文件<strong>存在但零行内容</strong>，是预留占位（未来可能放程序化 SDK 入口）。本课不依赖它——CLI 的逻辑<strong>全在 <span class="mono">cli.py</span></strong>。
+        这里如实标注，免得讲一个还不存在的能力。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 模板降低上手门槛</div>
+      <div class="a"><span class="inline">quickstart</span> 不是从零教学，而是直接 clone 一套<strong>能跑的工程</strong>（如 <span class="mono">rag_eval</span>：带数据、指标、实验脚本），改改就能用。
+        它与 <span class="inline">hello_world</span> 的"最小骨架"<strong>互补</strong>：一个给完整范例、一个给最小起点。两者都把"第一次怎么跑起来"这道坎抹平了。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  <span class="mono">src/ragas/cli.py</span>：<span class="mono">app = typer.Typer(...)</span>，命令 <span class="mono">evals</span> / <span class="mono">quickstart</span> / <span class="mono">hello_world</span>（<span class="mono">@app.command()</span>），表格助手 <span class="mono">create_numerical_metrics_table</span> / <span class="mono">create_categorical_metrics_table</span> / <span class="mono">separate_metrics_by_type</span> / <span class="mono">display_metrics_tables</span>，模块加载 <span class="mono">load_eval_module</span>、跑实验 <span class="mono">run_experiments</span>，输出走 <span class="mono">ragas.utils.console</span>（rich）。
+  入口注册在 <span class="mono">pyproject.toml</span> 的 <span class="mono">[project.scripts] ragas = "ragas.cli:app"</span>。<span class="mono">src/ragas/sdk.py</span> 当前为空占位。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>typer + rich</strong>：声明式定义命令 + 彩色表格 / 进度动画，CLI 体验好、代码也短。</li>
+    <li><strong>quickstart 模板</strong>（本地复制或 GitHub 下载）大幅<strong>降低上手门槛</strong>，配 <span class="inline">hello_world</span> 最小骨架双管齐下。</li>
+    <li><strong>evals 复用实验系统</strong>（<span class="mono">get_dataset</span> / <span class="mono">run_async</span>）与门禁（Delta / pass-fail），把"跑评测、对比基线"搬到一行命令。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li><span class="mono">ragas</span> 命令（<span class="mono">pyproject [project.scripts]</span> → <span class="mono">cli.py</span> 的 typer <span class="inline">app</span>）是<strong>另一条上手路径</strong>，不写代码也能评测。</li>
+    <li>三条命令：<span class="inline">quickstart</span> 拉模板、<span class="inline">evals</span> 跑评测 + rich 表格（带基线门禁）、<span class="inline">hello_world</span> 造最小示例。</li>
+    <li><span class="mono">sdk.py</span> 目前为<strong>空占位</strong>；CLI 能力全在 <span class="mono">cli.py</span>。</li>
+  </ul>
+</div>
 """

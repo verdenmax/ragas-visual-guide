@@ -267,9 +267,96 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>集成②：观测</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+上一课把别的框架接进来评测；本课把<strong>评测过程本身</strong>接到"监控大盘"。<span class="mono">integrations/tracing/</span> 加上几个观测平台适配，
+让每一次评测都能<strong>可视化、可回溯</strong>——光看最后那个分数不够，你还想知道<strong>每一步</strong>发生了什么。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  只看评测的最终分数，像只看体检报告的<strong>总分</strong>——不知道哪项拖了后腿。观测平台是<strong>"监控大盘 + 行车记录仪"</strong>：
+  把每一次 LLM 调用、每一行打分、耗时与成本都录下来，出了问题能<strong>回放到具体那一步</strong>。
+  ragas 给 Langfuse / MLflow / LangSmith / Helicone / Opik 各配了一个<strong>"上报插头"</strong>，评测结果顺着插头进大盘。
+</div>
+
+<h2>五家观测平台（确实存在的）</h2>
+<p>下面是 <span class="mono">integrations/</span> 里<strong>真实存在</strong>的观测 / 追踪适配，只列这五家，不臆造：</p>
+<table class="t">
+  <tr><th>平台</th><th>子模块</th><th>接入方式（公开符号）</th></tr>
+  <tr><td><strong>Langfuse</strong></td><td class="mono">integrations/tracing/langfuse.py</td><td><span class="mono">observe</span> 装饰器 + <span class="mono">sync_trace()</span> → <span class="mono">LangfuseTrace.get_url()</span></td></tr>
+  <tr><td><strong>MLflow</strong></td><td class="mono">integrations/tracing/mlflow.py</td><td><span class="mono">sync_trace()</span> → <span class="mono">MLflowTrace.get_url()</span>（读 <span class="mono">MLFLOW_HOST</span>）</td></tr>
+  <tr><td><strong>LangSmith</strong></td><td class="mono">integrations/langsmith.py</td><td><span class="mono">upload_dataset</span> / <span class="mono">evaluate</span>（用 <span class="mono">EvaluatorChain</span> 把指标包成 evaluator）</td></tr>
+  <tr><td><strong>Helicone</strong></td><td class="mono">integrations/helicone.py</td><td><span class="mono">helicone_config</span> 单例（被 <span class="mono">evaluation.py</span> 引用）</td></tr>
+  <tr><td><strong>Opik</strong></td><td class="mono">integrations/opik.py</td><td><span class="mono">OpikTracer</span>（LangChain 回调，回传逐行分数）</td></tr>
+</table>
+<p>接法分三路：<strong>trace 录全链路</strong>（Langfuse / MLflow）、<strong>请求头归 session</strong>（Helicone，零改动）、<strong>LangChain 回调 / evaluator</strong>（Opik / LangSmith）。</p>
+
+<h2>observe：给评测装"行车记录仪"</h2>
+<p>Langfuse / MLflow 走的是 <strong>trace</strong>：把整次评测包成一条可追踪的链路，跑完再去服务器把它捞回来、拿到大盘上的可点链接。</p>
+<pre class="code"><span class="kw">from</span> ragas.integrations.tracing.langfuse <span class="kw">import</span> observe, sync_trace
+<span class="kw">from</span> ragas <span class="kw">import</span> evaluate
+
+@observe()                        <span class="cm"># 把整次评测包成一条 trace</span>
+<span class="kw">def</span> <span class="fn">run_evaluation</span>():
+    <span class="kw">return</span> evaluate(dataset, metrics)
+
+run_evaluation()
+trace = <span class="kw">await</span> sync_trace()        <span class="cm"># 等 trace 同步到服务器</span>
+print(trace.get_url())            <span class="cm"># 拿到大盘上的可点链接</span></pre>
+<p><span class="mono">tracing/__init__.py</span> 用 <span class="inline">__getattr__</span> <strong>惰性导出</strong> <span class="inline">observe</span> / <span class="inline">sync_trace</span> / <span class="inline">LangfuseTrace</span> / <span class="inline">MLflowTrace</span>；
+MLflow 侧的 <span class="inline">sync_trace</span> 改走 <span class="mono">get_last_active_trace_id</span> + <span class="mono">get_trace</span>，<span class="inline">MLflowTrace.get_url()</span> 用 <span class="mono">MLFLOW_HOST</span> 拼出 trace 链接。两家长得几乎一样，换平台只换 import。</p>
+
+<h2>helicone_config：不改代码就把评测归一个 session</h2>
+<p>Helicone 不靠装饰器，而是<strong>请求头</strong>。<span class="mono">helicone.py</span> 里 <span class="inline">helicone_config</span> 是个<strong>单例</strong>（<span class="inline">HeliconeSingleton</span>，用 <span class="inline">__new__</span> 保证全局唯一）。
+关键是它被 <strong>评测主流程</strong>引用——<span class="mono">evaluation.py</span> 顶部 import 它，经典 <span class="inline">evaluate()</span> 一开头就判断它是否开启：</p>
+<pre class="code"><span class="cm"># evaluate() 内部（精简）：设了 api_key 才生效</span>
+<span class="kw">if</span> helicone_config.is_enabled:
+    helicone_config.session_name = <span class="st">"ragas-evaluation"</span>
+    helicone_config.session_id = str(uuid.uuid4())   <span class="cm"># 每轮评测一个新 session</span></pre>
+<p><span class="inline">default_headers()</span> 把这些拼成 <span class="mono">Helicone-Session-*</span> 等请求头，于是这一轮评测的<strong>所有 LLM 调用</strong>在 Helicone 大盘里被归到<strong>同一个 session</strong>，可整体回看。
+没设 <span class="mono">api_key</span> 时 <span class="inline">is_enabled</span> 为 <span class="inline">False</span>，整段完全无感——<strong>开了才花钱、才上报</strong>。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 这么多观测依赖，会不会拖垮安装？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 可选依赖 + 惰性导入，按家隔离</div>
+      <div class="a">追踪栈在 <span class="mono">pyproject.toml</span> 是<strong>可选 extra</strong>（<span class="mono">tracing = ["langfuse&gt;=3.2.4", "mlflow&gt;=3.1.4"]</span>），不装也能用 ragas。
+        <span class="mono">tracing/__init__.py</span> 用 <span class="inline">__getattr__</span> 惰性导入，<span class="mono">langfuse.py</span> / <span class="mono">mlflow.py</span> 内部 <span class="mono">try/except</span> 设 <span class="mono">LANGFUSE_AVAILABLE</span> / <span class="mono">MLFLOW_AVAILABLE</span>，缺库时退化成 stub 而非崩溃。
+        这与<a href="34-integrations-frameworks.html">上一课</a>框架集成的"惰性导入"一脉相承：<strong>缺哪个平台只影响那一个插头</strong>。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ Opik / LangSmith 这两路怎么接</div>
+      <div class="a"><span class="inline">OpikTracer</span> 是个 <strong>LangChain 回调</strong>（继承 <span class="mono">LangchainOpikTracer</span>）：它认出评测链（<span class="mono">RAGAS_EVALUATION_CHAIN_NAME = "ragas evaluation"</span>）后，把<strong>逐行的指标分数</strong>通过 <span class="mono">log_traces_feedback_scores</span> 回传到 Opik。
+        LangSmith 的 <span class="inline">evaluate</span> 则用 <span class="inline">EvaluatorChain</span>（<a href="34-integrations-frameworks.html">第 34 课</a>）把 ragas 指标变成它的 <span class="mono">custom_evaluators</span>，直接在 LangSmith 平台上跑评测。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  追踪栈在 <span class="mono">src/ragas/integrations/tracing/</span>：<span class="mono">__init__.py</span>（<span class="mono">__getattr__</span> 惰性导出）、<span class="mono">langfuse.py</span>（<span class="mono">observe</span> / <span class="mono">sync_trace</span> / <span class="mono">LangfuseTrace</span>）、<span class="mono">mlflow.py</span>（<span class="mono">MLflowTrace</span> / <span class="mono">sync_trace</span>）。
+  另外三家在 <span class="mono">integrations/</span> 根：<span class="mono">langsmith.py</span>（<span class="mono">upload_dataset</span> / <span class="mono">evaluate</span> / <span class="mono">EvaluatorChain</span>）、<span class="mono">helicone.py</span>（<span class="mono">HeliconeSingleton</span> / <span class="mono">helicone_config</span> / <span class="mono">default_headers</span>，被 <span class="mono">evaluation.py</span> 的 <span class="mono">evaluate</span> 引用）、<span class="mono">opik.py</span>（<span class="mono">OpikTracer</span>，依赖 <span class="mono">RAGAS_EVALUATION_CHAIN_NAME</span>）。
+  可选依赖声明在 <span class="mono">pyproject.toml</span> 的 <span class="mono">[project.optional-dependencies].tracing</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>评测可上报多家观测平台</strong>（Langfuse / MLflow / LangSmith / Helicone / Opik）→ 生产级<strong>可视化与回溯</strong>，不止一个孤零零的分数。</li>
+    <li><strong>三种侵入度任选</strong>：<span class="inline">observe</span> + <span class="inline">sync_trace</span> 录全链路、<span class="inline">helicone_config</span> 零改动归 session、回调 / evaluator 接进现成平台。</li>
+    <li><strong>观测依赖全是可选 extra + 惰性导入</strong>：缺库退化成 stub，不影响核心安装与使用。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>评测结果能进监控体系：Langfuse / MLflow（<span class="inline">observe</span> + <span class="inline">sync_trace</span>）、LangSmith（<span class="inline">EvaluatorChain</span>）、Helicone（session 请求头）、Opik（回调回传分数）。</li>
+    <li><span class="inline">helicone_config</span> 单例被 <span class="inline">evaluate()</span> 引用：开了就给整轮评测<strong>归一个 session</strong>，闭环到生产观测。</li>
+    <li>观测能力都是<strong>可选依赖、惰性加载</strong>，缺库不炸整包。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="34-integrations-frameworks.html"><div class="dir">← 上一课</div><div class="ttl">集成①：框架</div></a><a class="next" href="36-source-debug-contribute.html"><div class="dir">下一课 →</div><div class="ttl">读源码 · 调试 · 测试 · 贡献</div></a></div>
 </div>

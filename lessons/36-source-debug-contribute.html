@@ -267,9 +267,100 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>读源码 · 调试 · 测试 · 贡献</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+前面把 ragas 的能力讲透了；这一课换个视角——你想<strong>下场改 ragas</strong>，怎么把开发环境搭起来、怎么跑测试还不烧钱、怎么提交。
+一句话：全靠 <strong>uv</strong> 管依赖，加上一个把所有动作一键化的 <strong>Makefile</strong>。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  这是给想动手改 ragas 的人的<strong>"工地安全须知 + 工具说明书"</strong>：<span class="inline">uv</span> 是统一的<strong>建材入场口</strong>（管虚拟环境与依赖），
+  <span class="inline">Makefile</span> 是墙上那排<strong>一键开关</strong>（<span class="mono">format</span> / <span class="mono">type</span> / <span class="mono">test</span> / <span class="mono">run-ci</span>），
+  而 <span class="inline">fake_llm</span> 这类<strong>替身演员</strong>让你彩排时不必请真演员（真 LLM）出场——又快又零成本。
+</div>
+
+<h2>用 uv 装环境（两档）</h2>
+<p>开发环境分两档，都自动建 <span class="mono">.venv</span> 并装好 pre-commit 钩子；<span class="mono">requires-python</span> 是 <span class="mono">&gt;=3.9</span>：</p>
+<pre class="code"><span class="cm"># 推荐：快速最小开发环境（约 79 个包，日常开发够用）</span>
+make install-minimal      <span class="cm"># 内部：uv pip install -e ".[dev-minimal]"</span>
+
+<span class="cm"># 或全量（含 ML / 观测栈，约 383 个包）</span>
+make install              <span class="cm"># 内部：uv sync --group dev</span></pre>
+<p><span class="mono">CONTRIBUTING.md</span> 写得很直白：<strong>用 <span class="mono">make</span> 命令而不是直接调工具</strong>；要直接跑 Python 工具时加 <span class="mono">uv run</span> 前缀。
+项目还用 <strong>uv workspace</strong>（<span class="mono">members = [".", "examples"]</span>）同时管主包和 <span class="mono">ragas-examples</span> 两个包，依赖版本统一。</p>
+
+<h2>日常三连：format / type / test</h2>
+<p>改完代码，提交前的标准动作就这几个开关：</p>
+<table class="t">
+  <tr><th>命令</th><th>干什么</th><th>底层工具</th></tr>
+  <tr><td class="mono">make format</td><td>格式化 + 自动修（含排序 / 删未用 import）</td><td class="mono">ruff format · ruff check --fix（lint 选 E/F/I）</td></tr>
+  <tr><td class="mono">make type</td><td>类型检查（只查 <span class="mono">src/ragas</span>）</td><td class="mono">pyright（typeCheckingMode=basic）</td></tr>
+  <tr><td class="mono">make check</td><td>快速体检 = format + type（不跑测试）</td><td class="mono">上面两个</td></tr>
+  <tr><td class="mono">make test</td><td>跑单测，可 <span class="mono">k=</span> 只跑匹配的</td><td class="mono">pytest tests/unit</td></tr>
+  <tr><td class="mono">make run-ci</td><td>本地完整复刻 GitHub CI</td><td class="mono">ruff --check + type + pytest --nbmake -n auto</td></tr>
+</table>
+<pre class="code">make check                  <span class="cm"># 格式化 + 类型检查</span>
+make test                   <span class="cm"># 跑全部单测</span>
+make test k=<span class="st">"faithfulness"</span>  <span class="cm"># 只跑名字匹配的用例</span>
+make run-ci                 <span class="cm"># 提 PR 前本地复刻一遍 CI</span></pre>
+
+<h2>fake_llm / fake_embedding：让指标测试确定、零成本</h2>
+<p>这是整套测试设计的精髓。<span class="mono">tests/conftest.py</span> 提供几个<strong>"替身" fixture</strong>，让指标 / 引擎测试<strong>不碰真模型</strong>：</p>
+<table class="t">
+  <tr><th>fixture</th><th>替身类</th><th>行为</th></tr>
+  <tr><td class="mono">fake_llm</td><td class="mono">EchoLLM</td><td>把 prompt 原样当回答吐回来，<span class="mono">is_finished</span> 永远 True → 确定、可断言</td></tr>
+  <tr><td class="mono">fake_embedding</td><td class="mono">EchoEmbedding</td><td>返回随机 768 维向量，测维度 / 形状够用</td></tr>
+  <tr><td class="mono">mock_llm</td><td class="mono">MockLLM</td><td><span class="mono">generate</span> 直接返回 response_model 的空实例，专测结构化输出路径</td></tr>
+  <tr><td class="mono">mock_embedding</td><td class="mono">MockEmbedding</td><td><span class="mono">np.random.seed(42)</span> 固定种子 → 可复现</td></tr>
+</table>
+<pre class="code"><span class="cm"># 测试里直接声明 fixture 名，pytest 自动注入（无需真 API key）</span>
+<span class="kw">def</span> <span class="fn">test_my_metric</span>(fake_llm, fake_embedding):
+    metric = MyMetric(llm=fake_llm)
+    <span class="cm"># 断言指标逻辑，而不是断言真模型答得好不好</span>
+    ...</pre>
+<p>于是"指标逻辑对不对"与"LLM 答得好不好"被<strong>解耦</strong>——单测<strong>确定、离线、零调用成本</strong>，CI 不必持有 <span class="mono">OPENAI_API_KEY</span>。
+<span class="mono">tests/</span> 下还分 <span class="mono">unit/</span>（再按 <span class="mono">backends</span> / <span class="mono">integrations</span> / <span class="mono">llms</span> / <span class="mono">prompt</span> 分组）、<span class="mono">e2e/</span>、<span class="mono">benchmarks/</span>。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 为什么所有命令都包一层 make + uv？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 一处定义，人人一致</div>
+      <div class="a">把 ruff / pyright / pytest 的具体参数（排除 <span class="mono">_version.py</span>、<span class="mono">--dist loadfile -n auto</span> 等）<strong>写死在 Makefile</strong>，谁敲 <span class="mono">make run-ci</span> 跑的都和 GitHub CI 完全一样，杜绝"我本地是绿的"。
+        <span class="mono">uv run --active</span> 又保证用的是项目 <span class="mono">.venv</span> 里钉死版本的工具，不被系统环境污染。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ benchmarks 在哪跑</div>
+      <div class="a"><span class="mono">make benchmarks</span> 跑 <span class="mono">tests/benchmarks/</span> 下的 <span class="mono">benchmark_eval.py</span> / <span class="mono">benchmark_testsetgen.py</span>；<span class="mono">make benchmarks-docker</span> 在容器里跑。
+        性能回归也有一键入口。日常流程见 <span class="mono">CONTRIBUTING.md</span>：开分支 → 改代码 → <span class="mono">make check</span> + <span class="mono">make test</span> → 提交，PR 前再 <span class="mono">make run-ci</span>。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  仓库根 <span class="mono">Makefile</span>：<span class="mono">install-minimal</span> / <span class="mono">install</span> / <span class="mono">format</span> / <span class="mono">type</span> / <span class="mono">check</span> / <span class="mono">test</span> / <span class="mono">run-ci</span> / <span class="mono">benchmarks</span> / <span class="mono">clean</span> 等目标（<span class="mono">make help</span> 看全）。
+  <span class="mono">pyproject.toml</span>：<span class="mono">requires-python &gt;=3.9</span>、<span class="mono">[tool.uv.workspace] members = [".", "examples"]</span>、<span class="mono">[tool.ruff]</span>（line 88、select E/F/I）、<span class="mono">[tool.pyright]</span>（basic、include <span class="mono">src/ragas</span>）、<span class="mono">[tool.pytest.ini_options]</span>，以及 <span class="mono">dev-minimal</span> extra 与 <span class="mono">[dependency-groups].dev</span> 两套。
+  <span class="mono">tests/conftest.py</span>：<span class="mono">fake_llm</span> / <span class="mono">fake_embedding</span> / <span class="mono">mock_llm</span> / <span class="mono">mock_embedding</span> fixture（<span class="mono">EchoLLM</span> / <span class="mono">EchoEmbedding</span> / <span class="mono">MockLLM</span> / <span class="mono">MockEmbedding</span>）。流程见 <span class="mono">CONTRIBUTING.md</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><span class="inline">fake_llm</span> / <span class="inline">fake_embedding</span> 让指标测试<strong>确定、离线、零成本</strong>，CI 不需要真 API key。</li>
+    <li><strong>Makefile 把整条 CI 一键化</strong>：<span class="mono">make run-ci</span> 本地即 GitHub CI，参数只定义一处，杜绝环境漂移。</li>
+    <li><strong>uv workspace 管多包</strong>（主包 + <span class="mono">ragas-examples</span>），依赖版本统一、可编辑安装。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>上手开发就用这套工具链：<span class="mono">make install-minimal</span> 装环境，<span class="mono">make format</span> / <span class="mono">type</span> / <span class="mono">test</span> 日常三连，<span class="mono">make run-ci</span> 提 PR 前自检。</li>
+    <li>指标 / 引擎单测靠 <span class="mono">conftest.py</span> 的 <span class="inline">fake_llm</span> / <span class="inline">fake_embedding</span> 跑得<strong>确定又零成本</strong>。</li>
+    <li>一切走 <strong>uv + Makefile</strong>：环境、依赖、CI 全统一，照 <span class="mono">CONTRIBUTING.md</span> 走即可。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="35-integrations-observability.html"><div class="dir">← 上一课</div><div class="ttl">集成②：观测</div></a><a class="next" href="37-cli.html"><div class="dir">下一课 →</div><div class="ttl">CLI</div></a></div>
 </div>
