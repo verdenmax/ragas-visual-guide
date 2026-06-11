@@ -267,9 +267,101 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>数据模型①：SingleTurnSample</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+<span class="inline">SingleTurnSample</span> 是 ragas 里最小的数据单位——把"一问一答"的全部证据塞进一个 pydantic 模型：
+问题、参考资料、标准答案、模型作答……一行就是一道题。本课认清它的字段语义，以及它如何汇成 <span class="inline">EvaluationDataset</span>。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  一行 <span class="inline">SingleTurnSample</span> 就像一张<strong>考卷</strong>：<strong>题目</strong>是 <span class="inline">user_input</span>，
+  <strong>允许翻阅的参考资料</strong>是 <span class="inline">retrieved_contexts</span>，<strong>标准答案</strong>是 <span class="inline">reference</span>，
+  <strong>考生的作答</strong>是 <span class="inline">response</span>。阅卷（评测）时，老师正是对照这几栏来打分。
+</div>
+
+<h2>一行样本 = 一张考卷</h2>
+<p><span class="inline">SingleTurnSample</span> 的字段<strong>全部是 Optional</strong>（默认 <span class="inline">None</span>），所以同一个模型能适配不同指标——缺哪栏就空着：</p>
+
+<table class="t">
+  <tr><th>字段</th><th>类型</th><th>一句话含义</th></tr>
+  <tr><td class="mono">user_input</td><td class="mono">Optional[str]</td><td>用户的问题 / 查询（考题）</td></tr>
+  <tr><td class="mono">retrieved_contexts</td><td class="mono">Optional[List[str]]</td><td>检索到的上下文（考生翻到的资料）</td></tr>
+  <tr><td class="mono">reference_contexts</td><td class="mono">Optional[List[str]]</td><td>应当检索到的参考上下文（标准资料）</td></tr>
+  <tr><td class="mono">retrieved_context_ids</td><td class="mono">Optional[List[Union[str, int]]]</td><td>检索上下文的 ID（按 ID 比对召回）</td></tr>
+  <tr><td class="mono">reference_context_ids</td><td class="mono">Optional[List[Union[str, int]]]</td><td>参考上下文的 ID</td></tr>
+  <tr><td class="mono">response</td><td class="mono">Optional[str]</td><td>模型生成的回答（考生作答）</td></tr>
+  <tr><td class="mono">multi_responses</td><td class="mono">Optional[List[str]]</td><td>同一问题的多个候选回答</td></tr>
+  <tr><td class="mono">reference</td><td class="mono">Optional[str]</td><td>参考答案 / ground truth（标准答案）</td></tr>
+  <tr><td class="mono">rubrics</td><td class="mono">Optional[Dict[str, str]]</td><td>打分细则（rubric 评分用）</td></tr>
+  <tr><td class="mono">persona_name</td><td class="mono">Optional[str]</td><td>生成该问题时所用的画像名（测试集生成元信息）</td></tr>
+  <tr><td class="mono">query_style</td><td class="mono">Optional[str]</td><td>问题风格（如 formal / casual）</td></tr>
+  <tr><td class="mono">query_length</td><td class="mono">Optional[str]</td><td>问题长度档（如 short / medium / long）</td></tr>
+</table>
+
+<p>不同指标只挑自己要的栏：<span class="inline">Faithfulness</span> 需要 <span class="inline">user_input</span> + <span class="inline">response</span> + <span class="inline">retrieved_contexts</span>；
+<span class="inline">ContextRecall</span> 还要 <span class="inline">reference</span>。缺列会在校验阶段直接报错（哪个指标缺哪列，<a href="10-rag-metrics.html">第 10 课</a>细讲）。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> BaseSample 的三件套：to_dict / get_features / to_string <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 to_dict 自动丢掉 None</div>
+      <div class="a"><span class="inline">to_dict()</span> 实际是 <span class="mono">model_dump(exclude_none=True)</span>——只保留你填了的字段，样本因此"按需带列"：
+<pre class="code"><span class="kw">from</span> ragas <span class="kw">import</span> SingleTurnSample
+
+sample = SingleTurnSample(
+    user_input=<span class="st">"谁写了《哈姆雷特》？"</span>,
+    response=<span class="st">"莎士比亚。"</span>,
+    reference=<span class="st">"威廉·莎士比亚"</span>,
+)
+sample.to_dict()       <span class="cm"># 只含这 3 个字段，其余 None 全部丢弃</span>
+sample.get_features()  <span class="cm"># ['user_input', 'response', 'reference']</span></pre>
+      </div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ get_features / to_string 的用处</div>
+      <div class="a"><span class="inline">get_features()</span> 返回"非 None 字段名"列表——校验"指标要的列在不在"时正是看它；<span class="inline">to_string()</span> 把样本拼成可读文本，便于打印调试。三件套都定义在基类 <span class="inline">BaseSample</span> 上，单轮 / 多轮样本共享。</div>
+    </div>
+  </div>
+</details>
+
+<h2>从样本到数据集：EvaluationDataset</h2>
+<p>把一堆样本装进 <span class="inline">EvaluationDataset</span>，就得到喂给评测的"一叠考卷"。它继承自抽象基类 <span class="inline">RagasDataset</span>，后者统一实现了一层<strong>转换器</strong>，让数据在多种格式间自由进出：</p>
+
+<table class="t">
+  <tr><th>转换器</th><th>作用</th></tr>
+  <tr><td class="mono">to_pandas() / from_pandas(df)</td><td>与 pandas DataFrame 互转</td></tr>
+  <tr><td class="mono">to_hf_dataset() / from_hf_dataset(ds)</td><td>与 HuggingFace Dataset 互转</td></tr>
+  <tr><td class="mono">to_csv(path) / to_jsonl(path) / from_jsonl(path)</td><td>落盘成 CSV / JSONL，或从 JSONL 读回</td></tr>
+  <tr><td class="mono">from_list(data) / from_dict(mapping)</td><td>从原始 dict 列表 / 字典构造（自动判断单轮 or 多轮）</td></tr>
+</table>
+
+<p><span class="inline">from_list</span> 会看每行的 <span class="inline">user_input</span> 是不是列表：是 → 当作 <span class="inline">MultiTurnSample</span>（<a href="05-multi-turn-sample.html">第 5 课</a>），否则当作 <span class="inline">SingleTurnSample</span>。<span class="inline">to_list</span> 则反过来把样本批量 <span class="inline">to_dict</span>（同样丢弃 None）。</p>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  全部在 <span class="mono">src/ragas/dataset_schema.py</span>：基类 <span class="mono">BaseSample</span> 提供 <span class="mono">to_dict</span>（<span class="mono">model_dump(exclude_none=True)</span>）/ <span class="mono">get_features</span> / <span class="mono">to_string</span>；
+  <span class="mono">SingleTurnSample</span> 的 12 个字段全为 <span class="mono">Optional</span>；转换器层在抽象基类 <span class="mono">RagasDataset</span>（<span class="mono">to_pandas</span> / <span class="mono">from_hf_dataset</span> / <span class="mono">to_csv</span> / <span class="mono">to_jsonl</span> / <span class="mono">from_list</span> …），
+  <span class="mono">EvaluationDataset</span> 是其具体子类（<span class="mono">to_list</span> / <span class="mono">from_list</span> 自动分流单轮 / 多轮）。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>to_dict 丢弃 None</strong>：样本"按需带字段"，同一个模型既能装齐全的 RAG 样本，也能只装"问题 + 回答"，喂给不同指标都不浪费列。</li>
+    <li><strong>统一转换层</strong>：pandas / HuggingFace / CSV / JSONL 的互转都收敛到 <span class="inline">RagasDataset</span> 一处实现，子类无需各写一套（DRY）。</li>
+    <li><strong>字段全 Optional</strong>：用一个数据模型覆盖多种评测场景，缺列在校验阶段才报错，定义阶段不强制。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li><span class="mono">SingleTurnSample</span> 把"一问一答"装进一个模型：核心是 <span class="inline">user_input</span> / <span class="inline">retrieved_contexts</span> / <span class="inline">response</span> / <span class="inline">reference</span>，字段全 Optional。</li>
+    <li><span class="inline">to_dict</span> 丢弃 None、<span class="inline">get_features</span> 列出非空列——这是后续"指标缺列校验"的依据。</li>
+    <li>数据流向：<strong>样本 → EvaluationDataset → 评测</strong>；下一课看多轮样本与消息（<a href="05-multi-turn-sample.html">第 5 课</a>）。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="03-evaluation-lifecycle.html"><div class="dir">← 上一课</div><div class="ttl">一次评测的生命周期</div></a><a class="next" href="05-multi-turn-sample.html"><div class="dir">下一课 →</div><div class="ttl">数据模型②：MultiTurnSample 与消息</div></a></div>
 </div>

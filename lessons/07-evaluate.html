@@ -267,9 +267,88 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>经典入口 evaluate()</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+手里已有一份评测数据时，<span class="inline">evaluate()</span> 让你"一键阅卷"：传入数据集和指标，拿回一张带分数的成绩单。
+本课带你跑通最小例子、读懂结果对象，并说明它为何已被官方标记<strong>废弃</strong>。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  <span class="inline">evaluate()</span> 像<strong>一键阅卷</strong>：把一叠考卷（<span class="inline">EvaluationDataset</span>）和一套评分标准（<span class="inline">metrics</span>）丢进去，
+  它自动安排"阅卷老师"并发批改，最后汇成一张成绩单（<span class="inline">EvaluationResult</span>）。
+</div>
+
+<h2>最小可跑示例</h2>
+<pre class="code"><span class="kw">from</span> ragas <span class="kw">import</span> evaluate, EvaluationDataset, SingleTurnSample
+<span class="kw">from</span> ragas.metrics <span class="kw">import</span> Faithfulness
+
+dataset = EvaluationDataset(samples=[
+    SingleTurnSample(
+        user_input=<span class="st">"谁写了《哈姆雷特》？"</span>,
+        retrieved_contexts=[<span class="st">"《哈姆雷特》是莎士比亚的剧作。"</span>],
+        response=<span class="st">"莎士比亚。"</span>,
+        reference=<span class="st">"威廉·莎士比亚"</span>,
+    ),
+])
+
+result = evaluate(dataset, metrics=[Faithfulness()])
+print(result)            <span class="cm"># {'faithfulness': 0.89} —— 每个指标一个均值</span>
+df = result.to_pandas()  <span class="cm"># 原始数据列 + 每个指标一列分数</span></pre>
+
+<p>注意我们<strong>没传 llm</strong>。<span class="inline">Faithfulness</span> 这类需要裁判模型的指标（<span class="inline">MetricWithLLM</span>）若还没绑 LLM、你又没传，<span class="inline">evaluate</span> 会自动建一个默认裁判 <span class="mono">llm_factory("gpt-4o-mini", client=OpenAI())</span>（embeddings 同理走 <span class="inline">embedding_factory</span>）。所以最小例子能跑，但需设置 <span class="mono">OPENAI_API_KEY</span>。</p>
+
+<p>不传 <span class="inline">metrics</span> 会怎样？<span class="inline">evaluate</span> 用 <strong>RAG 四件套</strong>兜底：<span class="mono">answer_relevancy</span>、<span class="mono">context_precision</span>、<span class="mono">faithfulness</span>、<span class="mono">context_recall</span>。</p>
+
+<h2>读懂 EvaluationResult</h2>
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 结果对象的三种读法 + 成本统计 <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 三种读法</div>
+      <div class="a"><strong>① <span class="inline">print(result)</span></strong> → 每个指标一个均值（用 <span class="inline">safe_nanmean</span>，自动忽略失败行的 <span class="mono">NaN</span>）；
+        <strong>② <span class="inline">result.to_pandas()</span></strong> → 把原始数据列与分数列横向拼接成 DataFrame；
+        <strong>③ <span class="inline">result["faithfulness"]</span></strong> → 取某个指标的每行分数列表。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 花了多少钱 / 多少 token</div>
+      <div class="a"><span class="inline">result.total_tokens()</span> 与 <span class="inline">result.total_cost()</span> 能统计开销，但<strong>前提</strong>是调用 <span class="inline">evaluate</span> 时传了 <span class="inline">token_usage_parser</span>；否则会抛错提示"未配置成本计算"。</div>
+    </div>
+  </div>
+</details>
+
+<h2>列名对不齐怎么办</h2>
+<p>若数据来自 <strong>HuggingFace Dataset</strong> 且列名和 ragas 默认不一致（如 <span class="mono">contexts_v1</span>），可传 <span class="mono">column_map={"contexts": "contexts_v1"}</span>；内部 <span class="inline">remap_column_names</span> 会先反向重命名再校验。注意：<strong>只有</strong>传入的是 HF <span class="inline">Dataset</span> 时才走这步，直接用 <span class="inline">EvaluationDataset</span> 则按字段名匹配。</p>
+
+<div class="card warn">
+  <div class="tag">⚠️ 已废弃，请转向 @experiment</div>
+  从源码看，<span class="inline">evaluate()</span> 与 <span class="inline">aevaluate()</span> <strong>都会发出 <span class="mono">DeprecationWarning</span></strong>，提示改用 <span class="mono">@experiment</span> 装饰器。
+  评测只是"打一次分"，而实验把"改动 → 跑分 → 留痕对比"固化成闭环。用法见 <a href="08-experiment.html">第 8 课</a>。
+</div>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  <span class="mono">src/ragas/evaluation.py</span>：<span class="mono">evaluate</span> 是同步包装（默认借 <span class="mono">nest_asyncio</span> 兼容 Jupyter），<span class="mono">aevaluate</span> 是 async 真实现，二者均 <span class="mono">warnings.warn(..., DeprecationWarning)</span>；
+  不传 metrics 默认 <span class="mono">answer_relevancy / context_precision / faithfulness / context_recall</span>；缺 LLM 时 <span class="mono">client = OpenAI(); llm = llm_factory("gpt-4o-mini", client=client)</span>。
+  结果对象 <span class="mono">EvaluationResult</span> 在 <span class="mono">dataset_schema.py</span>（<span class="mono">to_pandas</span> / <span class="mono">total_tokens</span> / <span class="mono">total_cost</span> / <span class="mono">__repr__</span>）；列名重映射在 <span class="mono">validation.py</span> 的 <span class="mono">remap_column_names</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>缺裁判自动兜底</strong>：没显式传 LLM 时自动建 <span class="inline">llm_factory("gpt-4o-mini")</span>，让最小例子开箱即跑（也可在 metric 级覆盖）。</li>
+    <li><strong>结果自带成本统计</strong>：配上 <span class="inline">token_usage_parser</span> 后，<span class="inline">total_tokens</span> / <span class="inline">total_cost</span> 直接出账。</li>
+    <li><strong>失败不拖垮整体</strong>：默认 <span class="mono">raise_exceptions=False</span>，单行失败记 <span class="mono">NaN</span>，均值用 <span class="inline">safe_nanmean</span> 忽略它。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>会跑会读：<span class="mono">EvaluationDataset</span> + <span class="mono">metrics</span> → <span class="mono">evaluate()</span> → 用 <span class="inline">print</span> / <span class="inline">to_pandas</span> / 索引读结果。</li>
+    <li>缺裁判时自动建默认 <span class="mono">gpt-4o-mini</span>；成本统计需传 <span class="mono">token_usage_parser</span>。</li>
+    <li><span class="mono">evaluate</span> / <span class="mono">aevaluate</span> <strong>已废弃</strong>（发 <span class="mono">DeprecationWarning</span>），官方指向 <span class="mono">@experiment</span>（<a href="08-experiment.html">第 8 课</a>）。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="06-two-datasets.html"><div class="dir">← 上一课</div><div class="ttl">两个 Dataset 之辨</div></a><a class="next" href="08-experiment.html"><div class="dir">下一课 →</div><div class="ttl">现代入口 @experiment</div></a></div>
 </div>

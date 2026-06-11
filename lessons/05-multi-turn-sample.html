@@ -267,9 +267,85 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>数据模型②：MultiTurnSample 与消息</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+单轮样本装"一问一答"，但 Agent 会<strong>多轮对话、还会调用工具</strong>。<span class="inline">MultiTurnSample</span> 用一串<strong>结构化消息</strong>把这些都装下，
+并在构造时就校验"对话顺序合不合法"。本课讲清五种消息与这道校验。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  一个 <span class="inline">MultiTurnSample</span> 就像<strong>一段聊天记录 + 几张工具调用小票</strong>：谁说了什么（人类 / AI）、AI 中途"喊"了哪个工具、
+  工具又回了什么结果，全都按时间顺序记在一条对话流里——评 Agent 时就照着这段记录复盘。
+</div>
+
+<h2>五种消息：对话的积木</h2>
+<p>消息类型定义在 <span class="mono">messages.py</span>，都是 pydantic 模型。<span class="inline">ToolCall</span> 本身不是消息，而是 <span class="inline">AIMessage</span> 里"想调用哪个工具"的描述：</p>
+
+<table class="t">
+  <tr><th>类型</th><th>关键字段</th><th>含义</th></tr>
+  <tr><td class="mono">Message</td><td class="mono">content, metadata</td><td>所有消息的基类（共同字段）</td></tr>
+  <tr><td class="mono">HumanMessage</td><td class="mono">type="human"</td><td>用户发言</td></tr>
+  <tr><td class="mono">AIMessage</td><td class="mono">type="ai", tool_calls</td><td>模型发言，可携带一组 ToolCall</td></tr>
+  <tr><td class="mono">ToolMessage</td><td class="mono">type="tool"</td><td>工具返回的结果</td></tr>
+  <tr><td class="mono">ToolCall</td><td class="mono">name, args</td><td>一次工具调用：工具名 + 参数（AIMessage.tool_calls 的元素）</td></tr>
+</table>
+
+<p><span class="inline">MultiTurnSample</span> 的 <span class="inline">user_input</span> 是一串消息（<span class="mono">List[Union[HumanMessage, AIMessage, ToolMessage]]</span>），
+而且是<strong>唯一必填</strong>字段；其余 <span class="inline">reference</span> / <span class="inline">reference_tool_calls</span> / <span class="inline">rubrics</span> / <span class="inline">reference_topics</span> 都是可选的参考标准。</p>
+
+<pre class="code"><span class="kw">from</span> ragas <span class="kw">import</span> MultiTurnSample
+<span class="kw">from</span> ragas.messages <span class="kw">import</span> HumanMessage, AIMessage, ToolMessage, ToolCall
+
+sample = MultiTurnSample(user_input=[
+    HumanMessage(content=<span class="st">"北京今天天气如何？"</span>),
+    AIMessage(content=<span class="st">""</span>, tool_calls=[
+        ToolCall(name=<span class="st">"get_weather"</span>, args={<span class="st">"city"</span>: <span class="st">"北京"</span>}),
+    ]),
+    ToolMessage(content=<span class="st">"晴，26°C"</span>),          <span class="cm"># 承接上一条 AI 的工具调用</span>
+    AIMessage(content=<span class="st">"北京今天晴，约 26 度。"</span>),
+])
+print(sample.pretty_repr())   <span class="cm"># 打印成可读的多轮对话</span></pre>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> field_validator 如何在"构造时"就拦下非法对话 <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 三条排序规则</div>
+      <div class="a"><span class="inline">MultiTurnSample</span> 在 <span class="inline">user_input</span> 上挂了一个 <span class="inline">field_validator</span>，逐条检查：
+        ① 每个元素必须是 <span class="inline">HumanMessage</span> / <span class="inline">AIMessage</span> / <span class="inline">ToolMessage</span> 之一；
+        ② <span class="inline">ToolMessage</span> 之前必须出现过 <span class="inline">AIMessage</span>；
+        ③ <span class="inline">ToolMessage</span> 必须紧跟在"带 <span class="inline">tool_calls</span> 的 <span class="inline">AIMessage</span>"或"另一个 <span class="inline">ToolMessage</span>"之后。任一条不满足就抛 <span class="inline">ValueError</span>。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 为什么把校验放在数据层</div>
+      <div class="a">pydantic 的 <span class="inline">field_validator</span> 在<strong>构造对象时</strong>立即执行，于是"工具结果凭空出现""对话顺序错乱"等问题在<strong>造样本阶段</strong>就报错，而不是拖到评测中途才崩。错误前移、定位更快。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  消息定义在 <span class="mono">src/ragas/messages.py</span>：<span class="mono">Message</span>（<span class="mono">content</span> / <span class="mono">metadata</span>）派生出 <span class="mono">HumanMessage</span> / <span class="mono">AIMessage</span>（带 <span class="mono">tool_calls</span>）/ <span class="mono">ToolMessage</span>，外加 <span class="mono">ToolCall</span>（<span class="mono">name</span> / <span class="mono">args</span>）。
+  <span class="mono">MultiTurnSample</span> 在 <span class="mono">dataset_schema.py</span>：<span class="mono">user_input</span> 上的 <span class="mono">field_validator</span>（<span class="mono">validate_user_input</span>）校验消息序，另有 <span class="mono">to_messages</span> / <span class="mono">pretty_repr</span> 与 <span class="mono">reference_tool_calls</span> / <span class="mono">reference_topics</span> 等参考字段。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>结构化消息</strong>：把"对话 + 工具调用"拆成 Human / AI / Tool 三类消息 + <span class="inline">ToolCall</span>，让 Agent 行为可被程序读取与打分，而不是一坨纯文本。</li>
+    <li><strong>调用与结果配对</strong>：<span class="inline">AIMessage.tool_calls</span> 描述"模型想调哪个工具"，随后的 <span class="inline">ToolMessage</span> 承接其结果，二者靠出现顺序配对，由 <span class="inline">field_validator</span> 保证合法。</li>
+    <li><strong>构造即校验</strong>：合法性检查放在数据层，把错误前移到"造样本"阶段，避免评测半途因脏数据中断。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>单轮 <span class="mono">SingleTurnSample</span>（<a href="04-single-turn-sample.html">第 4 课</a>）装"一问一答"，多轮 <span class="mono">MultiTurnSample</span> 装"一段带工具调用的对话"。</li>
+    <li>五种结构：<span class="mono">Message</span> / <span class="mono">HumanMessage</span> / <span class="mono">AIMessage</span> / <span class="mono">ToolMessage</span> / <span class="mono">ToolCall</span>；<span class="inline">user_input</span> 是消息列表（唯一必填）。</li>
+    <li>消息是 <strong>Agent / 多轮指标</strong>的评测载体（<a href="18-agent-metrics-internals.html">第 18 课</a>深入）。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="04-single-turn-sample.html"><div class="dir">← 上一课</div><div class="ttl">数据模型①：SingleTurnSample</div></a><a class="next" href="06-two-datasets.html"><div class="dir">下一课 →</div><div class="ttl">两个 Dataset 之辨</div></a></div>
 </div>

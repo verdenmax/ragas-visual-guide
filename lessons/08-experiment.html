@@ -267,9 +267,80 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>现代入口 @experiment</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+<span class="inline">evaluate()</span> 之后，ragas 把推荐入口换成了 <span class="inline">@experiment</span> 装饰器——把一次"评测"写成一个"实验函数"：
+对数据集每一行跑一遍、并发执行、自动把结果落盘留痕，方便一版版对比迭代。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  <span class="inline">@experiment</span> 像给评测做<strong>留痕实验</strong>：你只写"对一行数据做什么"，<span class="inline">arun</span> 负责对整张表批量跑、记录每行结果、存进 backend——
+  就像实验室里每次实验都<strong>登记在册</strong>，方便回看、对比哪次改动更好。
+</div>
+
+<h2>为什么从 evaluate 转向 @experiment</h2>
+<p>上一课提到，<span class="inline">evaluate</span> / <span class="inline">aevaluate</span> 都会发 <span class="mono">DeprecationWarning</span> 指向它。原因是 <strong>experiments-first</strong> 的理念：
+评测只"打一次分"，而每次改 prompt、换模型、调检索，都应该跑一个实验、留下<strong>可对比的记录</strong>，而不是分数算完就丢。</p>
+
+<h2>最小示例</h2>
+<pre class="code"><span class="kw">from</span> ragas <span class="kw">import</span> experiment
+
+<span class="cm"># 装饰器把普通 async 函数变成"可对数据集批量跑"的实验</span>
+<span class="kw">@</span><span class="fn">experiment</span>()
+<span class="kw">async def</span> <span class="fn">run_eval</span>(row):
+    score = <span class="kw">await</span> my_metric.ascore(response=row[<span class="st">"response"</span>])
+    <span class="kw">return</span> {**row, <span class="st">"score"</span>: score.value}   <span class="cm"># 返回要留痕的一行</span>
+
+<span class="cm"># dataset 是带 backend 的 Dataset（第 6 课）</span>
+exp = <span class="kw">await</span> run_eval.arun(dataset)
+print(exp)   <span class="cm"># Experiment(name=..., len=...)，结果已存进 backend</span></pre>
+
+<p>被装饰的函数接收<strong>一行数据</strong>、返回"要留痕的结果"（dict 或 pydantic 模型）；真正的批量执行交给 <span class="inline">arun</span>。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> arun 内部的 5 个动作：取名 → 解析 backend → 建 Experiment → 并发跑 → 存盘 <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 五步拆解</div>
+      <div class="a"><strong>①</strong> 没给 <span class="inline">name</span> 就用 <span class="inline">memorable_names.generate_unique_name()</span> 起个好记的名字（有 <span class="inline">name_prefix</span> 则拼前缀）；
+        <strong>②</strong> backend = 传入的 / 装饰器默认的，否则沿用 <span class="inline">dataset.backend</span>，经 <span class="inline">Experiment._resolve_backend</span> 解析；
+        <strong>③</strong> 建一个 <span class="inline">Experiment</span>（继承 <span class="inline">DataTable</span>，<a href="06-two-datasets.html">第 6 课</a>）；
+        <strong>④</strong> 把每行包成任务，用 <span class="inline">asyncio.as_completed</span> 并发执行，<span class="inline">tqdm</span> 显示进度；
+        <strong>⑤</strong> <span class="inline">save()</span> 落盘后返回该 <span class="inline">Experiment</span>。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 单行失败会中断整轮吗</div>
+      <div class="a">不会。<span class="inline">as_completed</span> 循环里逐个 <span class="inline">await</span>，单个任务抛错会被 <span class="mono">try/except</span> 捕获、打印一条 warning 后<strong>继续</strong>——和 <span class="inline">evaluate</span> 的"失败记 NaN"异曲同工，整批不被一行拖垮。</div>
+    </div>
+  </div>
+</details>
+
+<h2>version_experiment：把实验钉在某次代码上</h2>
+<p>想知道"这次实验对应哪段代码"？<span class="inline">version_experiment(name)</span>（需装 GitPython）会暂存改动、提交一次（默认消息 <span class="mono">Experiment: {name}</span>），
+并创建分支 <span class="mono">ragas/{name}</span>，返回 commit hash；默认在 <span class="inline">find_git_root()</span> 找到的仓库根操作。于是每个实验都能回溯到确切的代码快照。</p>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  <span class="mono">src/ragas/experiment.py</span>：<span class="mono">experiment(...)</span> 装饰器返回 <span class="mono">ExperimentWrapper</span>；<span class="mono">__call__</span> 调用原函数（自动兼容 async / sync），<span class="mono">arun</span> 负责取名 / 解析 backend / 建 <span class="mono">Experiment</span> / <span class="mono">asyncio.as_completed</span> 并发 / <span class="mono">save</span>；<span class="mono">version_experiment</span> 用 GitPython 提交并建 <span class="mono">ragas/{name}</span> 分支；<span class="mono">Experiment</span> 继承 <span class="mono">DataTable</span>（<span class="mono">DATATABLE_TYPE = "Experiment"</span>）。转向原因见 <span class="mono">evaluation.py</span> 的 <span class="mono">DeprecationWarning</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>实验即函数 + 自动留痕</strong>：把"对一行做什么"写成函数，结果自动存进 backend，可一版版对比迭代。</li>
+    <li><strong>arun 天然并发</strong>：用 <span class="inline">asyncio.as_completed</span> 并发跑所有行、<span class="inline">tqdm</span> 显示进度，单行失败只记 warning 不中断整轮。</li>
+    <li><strong>可复现</strong>：<span class="inline">version_experiment</span> 把实验与 git commit / 分支绑定，随时回到当时的代码快照。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li><span class="mono">@experiment</span> 是现代推荐入口（<span class="mono">evaluate</span> 已废弃）：装饰一个 async 函数 + <span class="mono">await fn.arun(dataset)</span>。</li>
+    <li><span class="inline">arun</span> = 取名 → 解析 backend → 建 <span class="mono">Experiment</span> → 并发跑 → 存盘；结果落 backend 可复查。</li>
+    <li>工作流：<strong>改动 → 跑实验 → 对比</strong>（必要时 <span class="inline">version_experiment</span> 钉住代码版本）。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="07-evaluate.html"><div class="dir">← 上一课</div><div class="ttl">经典入口 evaluate()</div></a><a class="next" href="09-metrics-overview.html"><div class="dir">下一课 →</div><div class="ttl">内置指标全景</div></a></div>
 </div>

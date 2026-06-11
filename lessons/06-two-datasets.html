@@ -267,9 +267,76 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>两个 Dataset 之辨</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+ragas 里有<strong>两个都叫 "Dataset" 的东西</strong>，分属两套体系、用途不同——这是最容易踩的混淆点。
+本课用一张对照表把边界一次讲清：哪个是"评测输入"，哪个是"带存储的台账"。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  <span class="inline">EvaluationDataset</span> 是<strong>待阅的一叠考卷</strong>——评测的输入，装满样本、直接交给阅卷。
+  而 <span class="inline">Dataset</span> / <span class="inline">DataTable</span> 是<strong>带存储的台账</strong>——像一本能存进抽屉（backend）、可反复增删查改、随时取回的工作簿。
+</div>
+
+<h2>一张对照表认清两者</h2>
+<table class="t">
+  <tr><th>维度</th><th>EvaluationDataset</th><th>Dataset / DataTable</th></tr>
+  <tr><td><strong>来历模块</strong></td><td class="mono">dataset_schema.py</td><td class="mono">dataset.py</td></tr>
+  <tr><td><strong>继承体系</strong></td><td>继承 <span class="mono">RagasDataset</span></td><td><span class="mono">DataTable</span> 泛型基类（<span class="mono">Dataset</span> 是其子类）</td></tr>
+  <tr><td><strong>装什么</strong></td><td>SingleTurnSample / MultiTurnSample 列表</td><td>任意 pydantic 模型或 dict 行</td></tr>
+  <tr><td><strong>主要用途</strong></td><td>评测输入（喂给 evaluate）</td><td>带存储的数据台账（实验数据源）</td></tr>
+  <tr><td><strong>持久化方式</strong></td><td>to_csv / to_jsonl / to_pandas 显式导出</td><td>绑定 backend，load / save / reload</td></tr>
+  <tr><td><strong>backend 解析</strong></td><td>有 backend 字段，但不走 registry</td><td><span class="mono">_resolve_backend</span> 解析字符串（如 "local/csv"）</td></tr>
+  <tr><td><strong>谁在用</strong></td><td><span class="mono">evaluate()</span>（<a href="07-evaluate.html">第 7 课</a>）</td><td><span class="mono">@experiment</span> 实验流（<a href="08-experiment.html">第 8 课</a>）</td></tr>
+</table>
+
+<p>关键点：<span class="inline">DataTable</span> 是个<strong>泛型基类</strong>（<span class="mono">Generic[T]</span>），用类属性 <span class="inline">DATATABLE_TYPE</span> 标记自己是 <span class="mono">"Dataset"</span> 还是 <span class="mono">"Experiment"</span>；
+<span class="inline">Dataset</span> 与 <span class="inline">Experiment</span>（<a href="08-experiment.html">第 8 课</a>）<strong>都继承它</strong>，共用 <span class="inline">load</span> / <span class="inline">save</span> / <span class="inline">_resolve_backend</span>。
+而 <span class="inline">EvaluationDataset</span> 走的是<strong>另一条</strong>（<span class="inline">RagasDataset</span>）继承链——两者只是名字相近，并无父子关系。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> "local/csv" 这串字符串是怎么变成后端的？<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 _resolve_backend：字符串 → 后端实例</div>
+      <div class="a">传字符串时，去全局 registry 查类再实例化；查不到就报出"可用后端清单"，传实例则原样返回：
+<pre class="code"><span class="kw">if</span> isinstance(backend, str):
+    registry = get_registry()
+    backend_class = registry[backend]   <span class="cm"># 查不到 → KeyError → 列出可用后端</span>
+    <span class="kw">return</span> backend_class(**kwargs)
+<span class="cm"># 已经是 BaseBackend 实例则直接返回</span></pre>
+      </div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 用字符串当 backend 的好处</div>
+      <div class="a">用户只需写 <span class="mono">"local/csv"</span>，无需手动 import 具体后端类；新后端注册进 registry 即可被字符串引用——<strong>插件式扩展</strong>，报错时还顺带列出所有可用项（backends 细节见 <a href="32-backends.html">第 32 课</a>）。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  <span class="mono">src/ragas/dataset.py</span>：泛型基类 <span class="mono">DataTable[T]</span>（含 <span class="mono">DATATABLE_TYPE</span>、静态方法 <span class="mono">_resolve_backend</span>、<span class="mono">load</span> / <span class="mono">save</span> / <span class="mono">reload</span>）与子类 <span class="mono">Dataset</span>（<span class="mono">DATATABLE_TYPE = "Dataset"</span>）。
+  <span class="mono">src/ragas/dataset_schema.py</span>：<span class="mono">EvaluationDataset</span> 继承 <span class="mono">RagasDataset</span>，靠 <span class="mono">to_pandas</span> / <span class="mono">to_csv</span> / <span class="mono">to_jsonl</span> 等转换器持久化。<span class="mono">Experiment</span>（<span class="mono">experiment.py</span>）同样继承 <span class="mono">DataTable</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>同名易混 → 讲清边界</strong>：用"输入考卷 vs 存储台账"区分两者的职责，避免 import 错对象。</li>
+    <li><strong>泛型基类复用</strong>：<span class="inline">DataTable</span> 被 <span class="inline">Dataset</span> 与 <span class="inline">Experiment</span> 共用，靠 <span class="inline">DATATABLE_TYPE</span> 区分身份，<span class="inline">load</span> / <span class="inline">save</span> 只写一遍（DRY）。</li>
+    <li><strong>backend 字符串解析</strong>：<span class="inline">_resolve_backend</span> 把 <span class="mono">"local/csv"</span> 映射到注册的后端类，插件式可扩展、报错友好。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>分清两个 Dataset：<span class="mono">EvaluationDataset</span>（评测输入，<span class="mono">dataset_schema.py</span>）vs <span class="mono">Dataset</span> / <span class="mono">DataTable</span>（存储台账，<span class="mono">dataset.py</span>）。</li>
+    <li>存储型走 <strong>backend</strong>：<span class="inline">_resolve_backend</span> 解析 <span class="mono">"local/csv"</span>；<span class="mono">Experiment</span> 也基于 <span class="mono">DataTable</span>。</li>
+    <li>选型：跑 <span class="mono">evaluate</span> 用 <span class="mono">EvaluationDataset</span>（<a href="07-evaluate.html">第 7 课</a>）；做 <span class="mono">@experiment</span> 用 <span class="mono">Dataset</span>（<a href="08-experiment.html">第 8 课</a>）。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="05-multi-turn-sample.html"><div class="dir">← 上一课</div><div class="ttl">数据模型②：MultiTurnSample 与消息</div></a><a class="next" href="07-evaluate.html"><div class="dir">下一课 →</div><div class="ttl">经典入口 evaluate()</div></a></div>
 </div>
