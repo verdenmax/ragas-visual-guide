@@ -355,7 +355,41 @@ result = <span class="kw">await</span> llm.agenerate(prompt_str, MyOutputModel) 
     <li>旧 wrapper 经 <span class="mono">DeprecationHelper</span> 保留并提醒迁移；collections 指标只认现代 LLM（<a href="13-metric-base.html">第 13 课</a>）。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. 现代 instructor 路径让 LLM「直接产出 pydantic 对象」，相比经典 langchain wrapper 好在哪？</div>
+  <ol class="opts">
+    <li>因为 pydantic 对象天生比字符串更省 token</li>
+    <li>因为 instructor 能让 LLM 不再需要 prompt</li>
+    <li>LLM 输出被直接校验成 pydantic 对象，省掉手写 JSON 解析，格式约束与重试都交给 instructor 兜底</li>
+    <li>因为用了 instructor，LLM 就不会再出错</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：C</strong>。经典路径要自己拼 prompt、再手写解析 + 重试；现代 instructor 路径给 client 打补丁，让 LLM 直接吐出校验过的 pydantic 对象，解析与重试由库兜底——是一处实打实的减法。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. <code>llm_factory(model, client=..., adapter='auto')</code> 里 client 必填、adapter 默认 'auto'，体现了什么取舍？</div>
+  <ol class="opts">
+    <li>client 必填，因为 instructor 要给真实 client 打补丁，传 None 直接 <code>ValueError</code>；adapter='auto' 则按 client 自动挑适配器，省去手填</li>
+    <li>client 可选，adapter 才是必填项</li>
+    <li>两个参数都是摆设，工厂内部会忽略它们</li>
+    <li>client 用来选语言，adapter 用来计费</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。没有具体 client，instructor 无从打补丁，所以 client 缺失即 <code>ValueError</code>；adapter 默认 'auto' 让它按 client 自动选适配器，常见场景一行就够——必填的是「真用得上的」，能猜的就给默认。</div></div></div>
+  </details>
+</div>
+<div class="card spark">
+  <div class="tag">💭 发散思考（没有标准答案，动手或动脑想想）</div>
+  <ul>
+    <li>你的项目里已经有一套基于 langchain wrapper 的经典调用，现在要不要迁到 instructor 路径？你会怎么权衡「免手写解析 / 拿到结构化输出」的收益与迁移、依赖成本？</li>
+  </ul>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="20-prompt-advanced.html"><div class="dir">← 上一课</div><div class="ttl">Prompt 进阶：few-shot 与翻译</div></a><a class="next" href="22-embedding-abstraction.html"><div class="dir">下一课 →</div><div class="ttl">Embedding 抽象</div></a></div>
 </div>
 

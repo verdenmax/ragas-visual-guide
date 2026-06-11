@@ -356,7 +356,35 @@ kg = KnowledgeGraph.load(<span class="st">"kg.json"</span>)</pre>
     <li>三个簇查询（<span class="mono">find_indirect_clusters</span> / <span class="mono">find_n_indirect_clusters</span> / <span class="mono">find_two_nodes_single_rel</span>）为多跳出题找组合。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. <code>KnowledgeGraph</code> 为什么要建成「节点 + 关系（边）」的图，而不是一个扁平文档列表？</div>
+  <ol class="opts">
+    <li>因为扁平列表存不下文本</li>
+    <li>图能显式记录节点之间的关联，后续才能沿边做跨节点（多跳）推理出题；扁平列表丢掉了这层关系</li>
+    <li>因为图天生比列表更省内存</li>
+    <li>因为图结构可以不调用 LLM</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。<code>KnowledgeGraph</code> 由 <code>Node</code> + <code>Relationship</code> 组成（节点类型分 DOCUMENT / CHUNK）。把关系显式存成边，多跳出题才有「路」可走；一堆孤立文档是连不出多跳题的。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. <code>find_indirect_clusters</code> / <code>find_two_nodes_single_rel</code> 这类簇 / 三元组查询是为什么准备的？</div>
+  <ol class="opts">
+    <li>为单跳题挑出唯一的那个节点</li>
+    <li>为多跳题备料：先把「能连起来的节点组」找出来，synthesizer 才有跨节点素材出题</li>
+    <li>为了压缩知识图谱的体积</li>
+    <li>为了给重复节点做去重</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。<code>find_indirect_clusters</code> / <code>find_n_indirect_clusters</code> / <code>find_two_nodes_single_rel</code> 都在图里捞「可连接的节点簇 / 三元组」，专为多跳 synthesizer 备料；单跳题只需一个节点，用不上这些。</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="25-testgen-overview.html"><div class="dir">← 上一课</div><div class="ttl">为什么自动造测试集</div></a><a class="next" href="27-transforms.html"><div class="dir">下一课 →</div><div class="ttl">Transforms</div></a></div>
 </div>
 

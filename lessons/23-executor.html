@@ -344,7 +344,35 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <li>重试基于 tenacity（指数退避 + 抖动 + reraise）；评测的并发与容错都在这一层（呼应 <a href="03-evaluation-lifecycle.html">第 3 课</a> 的评测生命周期）。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. <code>Executor</code> 为什么要用 <code>wrap_callable_with_index</code> 给每个任务带上原始索引？</div>
+  <ol class="opts">
+    <li>因为 tenacity 重试必须靠索引</li>
+    <li>因为索引决定任务的执行优先级</li>
+    <li>因为索引是用来计费的</li>
+    <li>并发完成的顺序是乱的，带上原始索引，收集后才能按输入顺序还原，保证结果保序</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。<code>wrap_callable_with_index</code> 把输入下标绑在结果上：并发返回是乱序的，带着索引才能在汇总时还原成与输入一一对应的顺序——评测最怕结果错位。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. 单个任务抛错时，为什么默认（<code>raise_exceptions=False</code>）把它转成 <code>np.nan</code> 而不是让整轮崩掉？</div>
+  <ol class="opts">
+    <li>因为 <code>np.nan</code> 比异常更省内存</li>
+    <li>因为 LLM 抛的错根本无法被捕获</li>
+    <li>一行出错就废掉整批评测代价太大；转成 <code>np.nan</code> 让该行缺测、其余结果照常产出，整轮更稳健</li>
+    <li>因为这样能自动重跑所有失败任务</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：C</strong>。评测动辄成百上千行，单题失败若直接抛出会拖垮整轮。默认 <code>raise_exceptions=False</code> 把异常吞成 <code>np.nan</code>：坏的那行记缺失，好的结果照样落地（配合 <code>RunConfig</code> 默认 timeout=180 / max_retries=10 / max_workers=16 与 tenacity 重试）。</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="22-embedding-abstraction.html"><div class="dir">← 上一课</div><div class="ttl">Embedding 抽象</div></a><a class="next" href="24-callbacks-cost-cache.html"><div class="dir">下一课 →</div><div class="ttl">Callbacks · 成本 · 缓存</div></a></div>
 </div>
 

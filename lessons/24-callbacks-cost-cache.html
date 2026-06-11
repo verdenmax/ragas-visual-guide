@@ -355,7 +355,41 @@ result.total_cost(cost_per_input_token=<span class="st">5e-6</span>, cost_per_ou
     <li>可观测、可算钱、可缓存——评测工程化的三件套。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. <code>cacher</code> + <code>DiskCacheBackend</code> 为什么用「调用内容的 sha256 哈希」当缓存 key？</div>
+  <ol class="opts">
+    <li>因为时间戳总在变，所以改用哈希</li>
+    <li>相同输入必得相同哈希、不同输入极难碰撞，用内容指纹当 key 才能精准复用上次的 LLM / embedding 结果</li>
+    <li>因为哈希顺带能加密你的 API key</li>
+    <li>因为 sha256 串比函数名更短</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。以「调用内容的 sha256」为 key：同样的输入 → 同样的 key → 直接命中缓存，省掉重复的 LLM / embedding 花费；哈希只是内容指纹，与加密、计费无关。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. <code>new_group</code> / <code>RagasTracer</code> 把一次评测组织成「run 树」，主要图什么？</div>
+  <ol class="opts">
+    <li>把 评测 → 每行 → 每个指标 的调用嵌套成 trace 树，方便回看每一步、定位是哪行哪个指标出了问题</li>
+    <li>因为这样评测就可以完全不调用 LLM</li>
+    <li>因为只有树结构才支持并发</li>
+    <li>因为树结构能让评测整体跑得更快</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。<code>new_group</code> 开运行分组，<code>RagasTracer</code> 把一轮记成 EVALUATION → ROW → METRIC 的 trace 树；<code>CostCallbackHandler</code> 再顺手聚合 token / 成本。可观测性是为了「出问题能顺树查到底」，不是提速。</div></div></div>
+  </details>
+</div>
+<div class="card spark">
+  <div class="tag">💭 发散思考（没有标准答案，动手或动脑想想）</div>
+  <ul>
+    <li>如果你的评测每天要重复跑很多次，你会怎么权衡「开缓存省钱省时间」与「缓存可能让你看不到模型 / 数据已经悄悄变了」之间的风险？什么时候该主动清缓存？</li>
+  </ul>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="23-executor.html"><div class="dir">← 上一课</div><div class="ttl">执行引擎 Executor</div></a><a class="next" href="25-testgen-overview.html"><div class="dir">下一课 →</div><div class="ttl">为什么自动造测试集</div></a></div>
 </div>
 

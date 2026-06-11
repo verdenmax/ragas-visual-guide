@@ -342,7 +342,35 @@ personas = generate_personas_from_kg(kg=kg, llm=llm, num_personas=3)
     <li>多样性 = <strong>persona + 风格 + 长度</strong>（再乘上节点）的组合，可控可枚举。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. persona 为什么用 <code>generate_personas_from_kg</code> 从知识图谱自动生成，而不是让用户手填？</div>
+  <ol class="opts">
+    <li>因为手填的 persona 无法被序列化保存</li>
+    <li>personas 直接源自图谱里的真实内容，自动生成既贴合语料又省人工，提问视角更有据</li>
+    <li>因为 persona 必须和 LLM 来自同一家</li>
+    <li>因为自动生成 persona 能省 token</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。<code>generate_personas_from_kg</code> 从知识图谱里「就地取材」造提问者：视角来自真实语料、不靠拍脑袋，也免去人工编写——「谁来问」这件事因此既贴题又省力。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. <code>BaseScenario</code> = nodes + style（<code>QueryStyle</code>）+ length（<code>QueryLength</code>）+ persona，这样组合的目的是？</div>
+  <ol class="opts">
+    <li>因为这样能减少图里的节点数量</li>
+    <li>因为风格和长度是用来计费的</li>
+    <li>因为这四个字段缺一个就无法存盘</li>
+    <li>用「谁问 × 什么风格 × 多长 × 基于哪些节点」的组合撑开测试集多样性，覆盖更多真实提问形态</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。把节点、风格、长度、persona 四个维度组合起来，等于用一个笛卡尔积去覆盖各种真实提问形态；调节组合就能调节测试集的多样性与难度分布。</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="27-transforms.html"><div class="dir">← 上一课</div><div class="ttl">Transforms</div></a><a class="next" href="29-synthesizers.html"><div class="dir">下一课 →</div><div class="ttl">Synthesizers</div></a></div>
 </div>
 

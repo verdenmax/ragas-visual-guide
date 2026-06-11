@@ -347,7 +347,41 @@ eval_dataset = dataset.to_evaluation_dataset()   <span class="cm"># 回到评测
     <li>产物 <span class="inline">Testset</span> 一步 <span class="inline">to_evaluation_dataset()</span> 即可<strong>直接评测</strong>，两条主线在此闭环。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. <code>generate</code> 为什么要复用 <code>Executor</code> + <code>new_group</code> 来「分阶段并发出题」？</div>
+  <ol class="opts">
+    <li>出题是大量独立的 LLM 调用，交给 <code>Executor</code> 并发提速、用 <code>new_group</code> 分阶段记录，直接复用评测线已有的调度与可观测能力</li>
+    <li>因为分阶段纯粹是为了日志好看</li>
+    <li>因为 <code>new_group</code> 能让出题过程不调用 LLM</li>
+    <li>因为不借助 <code>Executor</code> 就建不出知识图谱</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。<code>generate_with_langchain_docs</code> / <code>generate</code> 把 transforms → KG → personas → 分配 → 出题 串起来，其中出题是海量独立 LLM 调用，正好复用 <code>Executor</code> 并发与 <code>new_group</code> 分阶段 trace——两条线共用一套基础设施。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. <code>Testset.to_evaluation_dataset()</code> 这一步的设计意义是？</div>
+  <ol class="opts">
+    <li>因为这样就能省去构建知识图谱的步骤</li>
+    <li>因为 <code>Testset</code> 本身没法保存到磁盘</li>
+    <li>因为评测线只接受 CSV 格式</li>
+    <li>把「测试生成线」的产物一键转成评测线吃的数据集，让造好的题目直接回流去跑 evaluate / 实验，闭合两条线</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。它把生成出来的测试集转成 <code>EvaluationDataset</code>，直接喂给 <code>evaluate</code> / <code>@experiment</code>——测试生成线由此接回评测线，两大支柱在这里合龙。</div></div></div>
+  </details>
+</div>
+<div class="card spark">
+  <div class="tag">💭 发散思考（没有标准答案，动手或动脑想想）</div>
+  <ul>
+    <li>你用 <code>generate_with_langchain_docs</code> 造好了一批测试集，准备 <code>to_evaluation_dataset()</code> 回到评测线。在正式拿它当「考卷」前，你会做哪些抽检来确认这批自动生成的题目值得信任？</li>
+  </ul>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="29-synthesizers.html"><div class="dir">← 上一课</div><div class="ttl">Synthesizers</div></a><a class="next" href="31-experiments-deep.html"><div class="dir">下一课 →</div><div class="ttl">实验系统深入</div></a></div>
 </div>
 

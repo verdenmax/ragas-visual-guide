@@ -579,6 +579,278 @@ QUIZZES = {
             "你的评测要服务多语言用户：你会用 <code>adapt()</code> 把 prompt 整体翻译，还是为每种语言单独维护一套？动态 few-shot 在跨语言场景下又能帮上什么忙？",
         ],
     },
+    "21-llm-abstraction.html": {
+        "mcq": [
+            {
+                "q": "现代 instructor 路径让 LLM「直接产出 pydantic 对象」，相比经典 langchain wrapper 好在哪？",
+                "opts": [
+                    "因为用了 instructor，LLM 就不会再出错",
+                    "因为 pydantic 对象天生比字符串更省 token",
+                    "LLM 输出被直接校验成 pydantic 对象，省掉手写 JSON 解析，格式约束与重试都交给 instructor 兜底",
+                    "因为 instructor 能让 LLM 不再需要 prompt",
+                ],
+                "answer": 2,
+                "why": "经典路径要自己拼 prompt、再手写解析 + 重试；现代 instructor 路径给 client 打补丁，让 LLM 直接吐出校验过的 pydantic 对象，解析与重试由库兜底——是一处实打实的减法。",
+            },
+            {
+                "q": "<code>llm_factory(model, client=..., adapter='auto')</code> 里 client 必填、adapter 默认 'auto'，体现了什么取舍？",
+                "opts": [
+                    "client 可选，adapter 才是必填项",
+                    "client 必填，因为 instructor 要给真实 client 打补丁，传 None 直接 <code>ValueError</code>；adapter='auto' 则按 client 自动挑适配器，省去手填",
+                    "两个参数都是摆设，工厂内部会忽略它们",
+                    "client 用来选语言，adapter 用来计费",
+                ],
+                "answer": 1,
+                "why": "没有具体 client，instructor 无从打补丁，所以 client 缺失即 <code>ValueError</code>；adapter 默认 'auto' 让它按 client 自动选适配器，常见场景一行就够——必填的是「真用得上的」，能猜的就给默认。",
+            },
+        ],
+        "open": [
+            "你的项目里已经有一套基于 langchain wrapper 的经典调用，现在要不要迁到 instructor 路径？你会怎么权衡「免手写解析 / 拿到结构化输出」的收益与迁移、依赖成本？",
+        ],
+    },
+    "22-embedding-abstraction.html": {
+        "mcq": [
+            {
+                "q": "现代 <code>BaseRagasEmbedding</code> 与 legacy <code>BaseRagasEmbeddings</code> 为什么并存？",
+                "opts": [
+                    "新接口删掉了所有异步方法",
+                    "两者完全相同，只是改了名字大小写",
+                    "legacy 才支持多 provider，新版只支持一家",
+                    "现代版收敛出更精简的 <code>embed_text</code> / <code>aembed_text</code> 接口，与 legacy 并存是为了平滑迁移、不逼人一次性重写",
+                ],
+                "answer": 3,
+                "why": "新旧接口并存是迁移友好：现代 <code>BaseRagasEmbedding</code> 提供更薄的 <code>embed_text</code> / <code>aembed_text</code>，老代码仍可用 legacy 的 <code>BaseRagasEmbeddings</code>，逐步切换而非推倒重来。",
+            },
+            {
+                "q": "<code>_infer_embedding_provider_from_llm</code>（按所选 LLM 推断 embedding provider）解决的是什么？",
+                "opts": [
+                    "让用户少配一次：既然已经选了某家 LLM，就顺势推断同厂 embedding provider，减少重复配置",
+                    "因为 embedding 必须和 LLM 同厂，否则一定报错",
+                    "因为这样就能完全不用 embedding 也能跑",
+                    "因为推断比显式配置更省 token",
+                ],
+                "answer": 0,
+                "why": "在你已选好 LLM 时顺势猜出同厂 embedding provider，是「少配一次」的体贴默认；想换别家仍可显式指定，并非强制同厂，也跟省 token 无关。",
+            },
+        ],
+    },
+    "23-executor.html": {
+        "mcq": [
+            {
+                "q": "<code>Executor</code> 为什么要用 <code>wrap_callable_with_index</code> 给每个任务带上原始索引？",
+                "opts": [
+                    "因为索引是用来计费的",
+                    "并发完成的顺序是乱的，带上原始索引，收集后才能按输入顺序还原，保证结果保序",
+                    "因为 tenacity 重试必须靠索引",
+                    "因为索引决定任务的执行优先级",
+                ],
+                "answer": 1,
+                "why": "<code>wrap_callable_with_index</code> 把输入下标绑在结果上：并发返回是乱序的，带着索引才能在汇总时还原成与输入一一对应的顺序——评测最怕结果错位。",
+            },
+            {
+                "q": "单个任务抛错时，为什么默认（<code>raise_exceptions=False</code>）把它转成 <code>np.nan</code> 而不是让整轮崩掉？",
+                "opts": [
+                    "因为 <code>np.nan</code> 比异常更省内存",
+                    "因为 LLM 抛的错根本无法被捕获",
+                    "因为这样能自动重跑所有失败任务",
+                    "一行出错就废掉整批评测代价太大；转成 <code>np.nan</code> 让该行缺测、其余结果照常产出，整轮更稳健",
+                ],
+                "answer": 3,
+                "why": "评测动辄成百上千行，单题失败若直接抛出会拖垮整轮。默认 <code>raise_exceptions=False</code> 把异常吞成 <code>np.nan</code>：坏的那行记缺失，好的结果照样落地（配合 <code>RunConfig</code> 默认 timeout=180 / max_retries=10 / max_workers=16 与 tenacity 重试）。",
+            },
+        ],
+    },
+    "24-callbacks-cost-cache.html": {
+        "mcq": [
+            {
+                "q": "<code>cacher</code> + <code>DiskCacheBackend</code> 为什么用「调用内容的 sha256 哈希」当缓存 key？",
+                "opts": [
+                    "相同输入必得相同哈希、不同输入极难碰撞，用内容指纹当 key 才能精准复用上次的 LLM / embedding 结果",
+                    "因为 sha256 串比函数名更短",
+                    "因为时间戳总在变，所以改用哈希",
+                    "因为哈希顺带能加密你的 API key",
+                ],
+                "answer": 0,
+                "why": "以「调用内容的 sha256」为 key：同样的输入 → 同样的 key → 直接命中缓存，省掉重复的 LLM / embedding 花费；哈希只是内容指纹，与加密、计费无关。",
+            },
+            {
+                "q": "<code>new_group</code> / <code>RagasTracer</code> 把一次评测组织成「run 树」，主要图什么？",
+                "opts": [
+                    "因为树结构能让评测整体跑得更快",
+                    "因为只有树结构才支持并发",
+                    "把 评测 → 每行 → 每个指标 的调用嵌套成 trace 树，方便回看每一步、定位是哪行哪个指标出了问题",
+                    "因为这样评测就可以完全不调用 LLM",
+                ],
+                "answer": 2,
+                "why": "<code>new_group</code> 开运行分组，<code>RagasTracer</code> 把一轮记成 EVALUATION → ROW → METRIC 的 trace 树；<code>CostCallbackHandler</code> 再顺手聚合 token / 成本。可观测性是为了「出问题能顺树查到底」，不是提速。",
+            },
+        ],
+        "open": [
+            "如果你的评测每天要重复跑很多次，你会怎么权衡「开缓存省钱省时间」与「缓存可能让你看不到模型 / 数据已经悄悄变了」之间的风险？什么时候该主动清缓存？",
+        ],
+    },
+    "25-testgen-overview.html": {
+        "mcq": [
+            {
+                "q": "为什么要「自动造测试集」，而不是全靠人手写？",
+                "opts": [
+                    "因为手写的测试集一定带语法错误",
+                    "手写测试集往往量少、覆盖偏、还慢；自动生成能放量、铺开覆盖面，而且整条管道可复现",
+                    "因为自动生成完全不需要任何文档",
+                    "因为手写的测试集没法喂给 LLM 应用",
+                ],
+                "answer": 1,
+                "why": "手写测试集的三宗罪是少 / 偏 / 慢；测试生成线用文档自动造数据，量能上去、覆盖更全，且可复现——这正是它存在的理由。",
+            },
+            {
+                "q": "测试生成被拆成 docs → KnowledgeGraph → personas → scenarios → samples → Testset 这样的分阶段管道，好在哪？",
+                "opts": [
+                    "因为阶段拆得越多整体跑得越快",
+                    "因为只有分阶段才能不依赖任何文档",
+                    "每步职责单一、产物可检查可复现，既贴近真实使用，又便于单独调试某一阶段",
+                    "因为分阶段就能免去所有 LLM 调用",
+                ],
+                "answer": 2,
+                "why": "把造数据拆成「建图 → 生成 persona → 编排 scenario → 落成 sample → 打包 Testset」，每一步都有可检查的中间产物，定位问题、替换某一阶段都更容易。",
+            },
+        ],
+        "open": [
+            "拿你自己的一个知识库设想：用自动测试生成来造评测集时，你最担心生成出来的题目在哪些方面「不像真实用户会问的」？你会怎么校验这批生成结果的质量？",
+        ],
+    },
+    "26-knowledge-graph.html": {
+        "mcq": [
+            {
+                "q": "<code>KnowledgeGraph</code> 为什么要建成「节点 + 关系（边）」的图，而不是一个扁平文档列表？",
+                "opts": [
+                    "因为图天生比列表更省内存",
+                    "因为扁平列表存不下文本",
+                    "因为图结构可以不调用 LLM",
+                    "图能显式记录节点之间的关联，后续才能沿边做跨节点（多跳）推理出题；扁平列表丢掉了这层关系",
+                ],
+                "answer": 3,
+                "why": "<code>KnowledgeGraph</code> 由 <code>Node</code> + <code>Relationship</code> 组成（节点类型分 DOCUMENT / CHUNK）。把关系显式存成边，多跳出题才有「路」可走；一堆孤立文档是连不出多跳题的。",
+            },
+            {
+                "q": "<code>find_indirect_clusters</code> / <code>find_two_nodes_single_rel</code> 这类簇 / 三元组查询是为什么准备的？",
+                "opts": [
+                    "为多跳题备料：先把「能连起来的节点组」找出来，synthesizer 才有跨节点素材出题",
+                    "为单跳题挑出唯一的那个节点",
+                    "为了压缩知识图谱的体积",
+                    "为了给重复节点做去重",
+                ],
+                "answer": 0,
+                "why": "<code>find_indirect_clusters</code> / <code>find_n_indirect_clusters</code> / <code>find_two_nodes_single_rel</code> 都在图里捞「可连接的节点簇 / 三元组」，专为多跳 synthesizer 备料；单跳题只需一个节点，用不上这些。",
+            },
+        ],
+    },
+    "27-transforms.html": {
+        "mcq": [
+            {
+                "q": "transform 被分成 Extractor / Splitter / RelationshipBuilder / NodeFilter 四类，这种拆分意义何在？",
+                "opts": [
+                    "因为四类正好各对应一家 LLM 厂商",
+                    "把建图拆成切块、抽属性、连边、过滤四种单一职责的积木，便于拼装与替换出不同管道",
+                    "因为建图必须正好四步，多一步少一步都不行",
+                    "因为这样建图就能不依赖知识图谱",
+                ],
+                "answer": 1,
+                "why": "四类 transform 是四种单一职责的可组合积木；<code>default_transforms</code> 把它们按「切块 → 抽摘要 / 主题 / NER / embedding → 按相似度连边」拼成标准管道，<code>Parallel</code> 还能把同层变换并行分组。",
+            },
+            {
+                "q": "<code>rollback_transforms</code> 当前直接抛 <code>NotImplementedError</code>，最贴切的解读是？",
+                "opts": [
+                    "说明回滚功能已被废弃、永不会实现",
+                    "说明你调用的姿势不对",
+                    "先占住「回滚」这个接口与语义位，但实现尚未完成——是显式的「保留接口、暂未实现」",
+                    "说明缺了某个依赖没装上",
+                ],
+                "answer": 2,
+                "why": "API 形状先定下来、占住位置，实现留待后续。这是一种「先声明意图」的占位，既不是废弃，也不是在指引你换调用方式或补依赖。",
+            },
+        ],
+    },
+    "28-persona-scenario.html": {
+        "mcq": [
+            {
+                "q": "persona 为什么用 <code>generate_personas_from_kg</code> 从知识图谱自动生成，而不是让用户手填？",
+                "opts": [
+                    "personas 直接源自图谱里的真实内容，自动生成既贴合语料又省人工，提问视角更有据",
+                    "因为手填的 persona 无法被序列化保存",
+                    "因为 persona 必须和 LLM 来自同一家",
+                    "因为自动生成 persona 能省 token",
+                ],
+                "answer": 0,
+                "why": "<code>generate_personas_from_kg</code> 从知识图谱里「就地取材」造提问者：视角来自真实语料、不靠拍脑袋，也免去人工编写——「谁来问」这件事因此既贴题又省力。",
+            },
+            {
+                "q": "<code>BaseScenario</code> = nodes + style（<code>QueryStyle</code>）+ length（<code>QueryLength</code>）+ persona，这样组合的目的是？",
+                "opts": [
+                    "因为这四个字段缺一个就无法存盘",
+                    "因为风格和长度是用来计费的",
+                    "因为这样能减少图里的节点数量",
+                    "用「谁问 × 什么风格 × 多长 × 基于哪些节点」的组合撑开测试集多样性，覆盖更多真实提问形态",
+                ],
+                "answer": 3,
+                "why": "把节点、风格、长度、persona 四个维度组合起来，等于用一个笛卡尔积去覆盖各种真实提问形态；调节组合就能调节测试集的多样性与难度分布。",
+            },
+        ],
+    },
+    "29-synthesizers.html": {
+        "mcq": [
+            {
+                "q": "出题为什么拆成 <code>generate_scenarios</code> → <code>generate_sample</code> 两步？",
+                "opts": [
+                    "因为一步到位就没法调用 LLM",
+                    "因为拆成两步比一步更省 token",
+                    "先定「考什么场景」，再落成具体样本；两步解耦让场景规划与样本生成各自可控、可复用",
+                    "因为 scenario 和 sample 必须来自不同的模型",
+                ],
+                "answer": 2,
+                "why": "<code>generate_scenarios</code> 先编排「用哪些节点、谁问、什么风格 / 长度」，<code>generate_sample</code> 再把场景写成真正的问答样本。解耦后可以先批量定场景、再统一生成，调试与复用都更灵活。",
+            },
+            {
+                "q": "<code>default_query_distribution</code> 为什么要「过滤掉没有有效簇的合成器」？",
+                "opts": [
+                    "因为合成器太多会导致超时",
+                    "多跳合成器需要图里有可连接的节点簇；图谱撑不起时先剔除，免得分了配额却出不出题",
+                    "因为单跳合成器从来不会被用到",
+                    "因为过滤掉一些合成器能让最终分数更高",
+                ],
+                "answer": 1,
+                "why": "它按概率给各题型（单跳 <code>SingleHopSpecific</code> vs 多跳 <code>MultiHopAbstract</code> / <code>Specific</code>）配比，但会先检查图能不能撑起该题型，撑不起的合成器直接过滤——避免「分了名额却生不出题」的空转。",
+            },
+        ],
+    },
+    "30-testset-generator.html": {
+        "mcq": [
+            {
+                "q": "<code>generate</code> 为什么要复用 <code>Executor</code> + <code>new_group</code> 来「分阶段并发出题」？",
+                "opts": [
+                    "因为 <code>new_group</code> 能让出题过程不调用 LLM",
+                    "因为不借助 <code>Executor</code> 就建不出知识图谱",
+                    "因为分阶段纯粹是为了日志好看",
+                    "出题是大量独立的 LLM 调用，交给 <code>Executor</code> 并发提速、用 <code>new_group</code> 分阶段记录，直接复用评测线已有的调度与可观测能力",
+                ],
+                "answer": 3,
+                "why": "<code>generate_with_langchain_docs</code> / <code>generate</code> 把 transforms → KG → personas → 分配 → 出题 串起来，其中出题是海量独立 LLM 调用，正好复用 <code>Executor</code> 并发与 <code>new_group</code> 分阶段 trace——两条线共用一套基础设施。",
+            },
+            {
+                "q": "<code>Testset.to_evaluation_dataset()</code> 这一步的设计意义是？",
+                "opts": [
+                    "把「测试生成线」的产物一键转成评测线吃的数据集，让造好的题目直接回流去跑 evaluate / 实验，闭合两条线",
+                    "因为 <code>Testset</code> 本身没法保存到磁盘",
+                    "因为评测线只接受 CSV 格式",
+                    "因为这样就能省去构建知识图谱的步骤",
+                ],
+                "answer": 0,
+                "why": "它把生成出来的测试集转成 <code>EvaluationDataset</code>，直接喂给 <code>evaluate</code> / <code>@experiment</code>——测试生成线由此接回评测线，两大支柱在这里合龙。",
+            },
+        ],
+        "open": [
+            "你用 <code>generate_with_langchain_docs</code> 造好了一批测试集，准备 <code>to_evaluation_dataset()</code> 回到评测线。在正式拿它当「考卷」前，你会做哪些抽检来确认这批自动生成的题目值得信任？",
+        ],
+    },
 }
 
 

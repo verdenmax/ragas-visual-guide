@@ -346,7 +346,35 @@ dist = default_query_distribution(llm, kg)
     <li>配比由 <span class="inline">default_query_distribution</span> 给（默认等概率），并自动剔除图谱撑不起的题型。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. 出题为什么拆成 <code>generate_scenarios</code> → <code>generate_sample</code> 两步？</div>
+  <ol class="opts">
+    <li>因为一步到位就没法调用 LLM</li>
+    <li>先定「考什么场景」，再落成具体样本；两步解耦让场景规划与样本生成各自可控、可复用</li>
+    <li>因为 scenario 和 sample 必须来自不同的模型</li>
+    <li>因为拆成两步比一步更省 token</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。<code>generate_scenarios</code> 先编排「用哪些节点、谁问、什么风格 / 长度」，<code>generate_sample</code> 再把场景写成真正的问答样本。解耦后可以先批量定场景、再统一生成，调试与复用都更灵活。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. <code>default_query_distribution</code> 为什么要「过滤掉没有有效簇的合成器」？</div>
+  <ol class="opts">
+    <li>因为过滤掉一些合成器能让最终分数更高</li>
+    <li>因为合成器太多会导致超时</li>
+    <li>因为单跳合成器从来不会被用到</li>
+    <li>多跳合成器需要图里有可连接的节点簇；图谱撑不起时先剔除，免得分了配额却出不出题</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。它按概率给各题型（单跳 <code>SingleHopSpecific</code> vs 多跳 <code>MultiHopAbstract</code> / <code>Specific</code>）配比，但会先检查图能不能撑起该题型，撑不起的合成器直接过滤——避免「分了名额却生不出题」的空转。</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="28-persona-scenario.html"><div class="dir">← 上一课</div><div class="ttl">Persona 与 Scenario</div></a><a class="next" href="30-testset-generator.html"><div class="dir">下一课 →</div><div class="ttl">TestsetGenerator 端到端</div></a></div>
 </div>
 
