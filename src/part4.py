@@ -396,10 +396,10 @@ reference_response = <span class="kw">await</span> self._decompose_and_verify_cl
 <span class="cm"># ② 非 precision 模式：再拆 reference，对 response 做 NLI（反方向）</span>
 <span class="kw">if</span> self.mode != <span class="st">"precision"</span>:
     response_reference = <span class="kw">await</span> self._decompose_and_verify_claims(reference, response)
+    fn = int(np.sum(~response_reference))   <span class="cm"># 标准答案里没被覆盖（漏说的真话）</span>
 
 tp = int(np.sum(reference_response))    <span class="cm"># 答案里有据可查的 claim</span>
 fp = int(np.sum(~reference_response))   <span class="cm"># 答案里查无实据（多说的假话）</span>
-fn = int(np.sum(~response_reference))   <span class="cm"># 标准答案里没被覆盖（漏说的真话）</span>
 
 <span class="kw">if</span>   self.mode == <span class="st">"precision"</span>: score = tp / (tp + fp + <span class="st">1e-8</span>)
 <span class="kw">elif</span> self.mode == <span class="st">"recall"</span>:    score = tp / (tp + fn + <span class="st">1e-8</span>)
@@ -486,12 +486,12 @@ pred = [tc <span class="kw">for</span> m <span class="kw">in</span> user_input
 
 aligned = int(self._is_sequence_aligned(            <span class="cm"># strict_order 默认 True：名字顺序要一致</span>
     [t.name <span class="kw">for</span> t <span class="kw">in</span> pred], [t.name <span class="kw">for</span> t <span class="kw">in</span> reference_tool_calls]))
-score = (参数精确度之和 / len(reference_tool_calls)) * aligned   <span class="cm"># 长度不齐再打覆盖折扣</span></pre>
+score = (arg_precision_sum / len(reference_tool_calls)) * aligned   <span class="cm"># 长度不齐再打覆盖折扣</span></pre>
 <p><span class="inline">ToolCallF1</span> 则把工具调用当成<strong>集合</strong>（名字 + 参数都相同才算一个），用集合运算算 TP/FP/FN 再求 F1：</p>
 <pre class="code"><span class="cm"># ToolCallF1：集合化后算 F1（顺序无关）</span>
-TP = 预测与参考的交集大小      <span class="cm"># actual ∩ expected</span>
-FP = 只出现在预测里的          <span class="cm"># actual − expected（多调了）</span>
-FN = 只出现在参考里的          <span class="cm"># expected − actual（漏调了）</span>
+TP = len(actual &amp; expected)   <span class="cm"># 预测 ∩ 参考</span>
+FP = len(actual - expected)   <span class="cm"># 只在预测里（多调了）</span>
+FN = len(expected - actual)   <span class="cm"># 只在参考里（漏调了）</span>
 f1 = calculate_f1_score(TP, FP, FN)</pre>
 <p>区别：<span class="inline">ToolCallAccuracy</span> 在意<strong>顺序与参数</strong>（默认 <span class="mono">strict_order=True</span>），<span class="inline">ToolCallF1</span> 把调用看成无序集合、只问"该调的调了没、有没有多调"。</p>
 

@@ -297,10 +297,10 @@ reference_response = <span class="kw">await</span> self._decompose_and_verify_cl
 <span class="cm"># ② 非 precision 模式：再拆 reference，对 response 做 NLI（反方向）</span>
 <span class="kw">if</span> self.mode != <span class="st">"precision"</span>:
     response_reference = <span class="kw">await</span> self._decompose_and_verify_claims(reference, response)
+    fn = int(np.sum(~response_reference))   <span class="cm"># 标准答案里没被覆盖（漏说的真话）</span>
 
 tp = int(np.sum(reference_response))    <span class="cm"># 答案里有据可查的 claim</span>
 fp = int(np.sum(~reference_response))   <span class="cm"># 答案里查无实据（多说的假话）</span>
-fn = int(np.sum(~response_reference))   <span class="cm"># 标准答案里没被覆盖（漏说的真话）</span>
 
 <span class="kw">if</span>   self.mode == <span class="st">"precision"</span>: score = tp / (tp + fp + <span class="st">1e-8</span>)
 <span class="kw">elif</span> self.mode == <span class="st">"recall"</span>:    score = tp / (tp + fn + <span class="st">1e-8</span>)
