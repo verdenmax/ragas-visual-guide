@@ -267,9 +267,105 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>Metric 基类体系</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+前面学会了<strong>用</strong>指标（<a href="09-metrics-overview.html">第 9 课</a>～<a href="12-traditional-metrics.html">第 12 课</a>），这一部分换个视角<strong>拆开看内部</strong>。第一课先认族谱：所有指标都从一套<strong>基类</strong>长出来，而 ragas 正处在<strong>两代血脉并存</strong>的迁移期——经典栈与现代栈各有一套基类，算法相同、接口不同。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  指标家族像一棵<strong>族谱树</strong>：祖先 <span class="inline">Metric</span> 定下"每个指标都要有名字、要声明吃哪些字段"的家规；下面分出两支血脉——
+  <strong>老一支</strong>讲究"按单轮 / 多轮分工"，<strong>新一支</strong>讲究"组件化 + 结构化输出"。两支干的是同一件事（打分），只是<strong>办事的接口和规矩</strong>不同。认清族谱，后面每个具体指标你都知道它"姓什么、随哪一支"。
+</div>
+
+<h2>经典栈：Metric 的三层分工</h2>
+<p>老一支以抽象基类 <span class="inline">Metric</span>（一个 <span class="mono">@dataclass</span>）为根，往下按"要不要模型 / 单轮还是多轮"分层，具体指标常<strong>多重继承</strong>把它们拼起来：</p>
+<pre class="code"><span class="cm"># 经典栈（legacy）：metrics/base.py</span>
+Metric (ABC, @dataclass)              <span class="cm"># 家规：name + required_columns + init()</span>
+├─ MetricWithLLM(Metric, PromptMixin) <span class="cm"># 注入 llm（裁判模型）+ PydanticPrompt</span>
+├─ MetricWithEmbeddings(Metric)       <span class="cm"># 注入 embeddings</span>
+├─ SingleTurnMetric(Metric)           <span class="cm"># single_turn_ascore(sample) -> float</span>
+└─ MultiTurnMetric(Metric)            <span class="cm"># multi_turn_ascore(sample) -> float</span>
+
+<span class="cm"># 具体指标 = 多重继承拼装，例如：</span>
+<span class="kw">class</span> <span class="fn">Faithfulness</span>(MetricWithLLM, SingleTurnMetric): ...</pre>
+<p>关键点：经典栈的调用入口是 <span class="inline">single_turn_ascore(sample)</span> / <span class="inline">multi_turn_ascore(sample)</span>，<strong>吃一个样本对象、返回一个 <span class="mono">float</span></strong>（解释另存）。这一支的具名指标（Faithfulness、ContextPrecision…）都已被标记<strong>废弃</strong>（<a href="09-metrics-overview.html">第 9 课</a>）。</p>
+
+<h2>现代栈：SimpleBaseMetric 与 collections</h2>
+<p>新一支以 <span class="inline">SimpleBaseMetric</span> 为根，分两条线：一条给<strong>你自定义</strong>（Simple 栈，<a href="11-custom-metrics.html">第 11 课</a>），一条给<strong>官方具名指标</strong>（collections）：</p>
+<pre class="code"><span class="cm"># 现代栈：metrics/base.py + metrics/collections/base.py</span>
+SimpleBaseMetric (ABC, @dataclass)        <span class="cm"># 家规：name + allowed_values；ascore() -> MetricResult</span>
+├─ SimpleLLMMetric                        <span class="cm"># 自定义用：prompt + _response_model</span>
+│   ├─ DiscreteMetric (+ DiscreteValidator)  <span class="cm"># 离散：pass/fail…</span>
+│   ├─ NumericMetric  (+ NumericValidator)   <span class="cm"># 数值：0~1</span>
+│   └─ RankingMetric  (+ RankingValidator)   <span class="cm"># 排序</span>
+└─ collections.BaseMetric(SimpleBaseMetric, NumericValidator)  <span class="cm"># 具名指标的现代基类</span>
+    └─ Faithfulness / ContextPrecision / ToolCallAccuracy …</pre>
+<p>现代栈统一用 <span class="inline">await metric.ascore(**kwargs)</span>，<strong>吃关键字参数、返回 <span class="inline">MetricResult</span></strong>（值 + 理由，<a href="14-metric-result.html">第 14 课</a>）。而且 collections 的 <span class="inline">BaseMetric</span> 在构造时<strong>只认现代组件</strong>：<span class="inline">_validate_llm()</span> 要求 <span class="inline">InstructorBaseRagasLLM</span>（<span class="mono">llm_factory</span> 的产物，<a href="21-llm-abstraction.html">第 21 课</a>），传错就当场 <span class="mono">ValueError</span>。</p>
+
+<table class="t">
+  <tr><th>维度</th><th>经典栈（legacy）</th><th>现代栈（collections / Simple）</th></tr>
+  <tr><td><strong>根基类</strong></td><td class="mono">Metric → MetricWithLLM / SingleTurnMetric</td><td class="mono">SimpleBaseMetric → BaseMetric / SimpleLLMMetric</td></tr>
+  <tr><td><strong>Prompt</strong></td><td class="mono">PydanticPrompt</td><td class="mono">BasePrompt / Prompt（instructor 结构化输出）</td></tr>
+  <tr><td><strong>LLM</strong></td><td>BaseRagasLLM（duck typing 也收 instructor）</td><td>只收 <span class="mono">InstructorBaseRagasLLM</span>，否则报错</td></tr>
+  <tr><td><strong>调用接口</strong></td><td class="mono">single_turn_ascore(sample) -> float</td><td class="mono">ascore(**kwargs) -> MetricResult</td></tr>
+  <tr><td><strong>位置</strong></td><td class="mono">metrics/_*.py（具名指标已废弃）</td><td class="mono">metrics/collections/&lt;name&gt;/（基类在 base.py）</td></tr>
+</table>
+
+<h2>两个横切枚举：MetricType / MetricOutputType</h2>
+<p>无论哪一支，都用两个 <span class="inline">Enum</span> 给指标"贴标签"：</p>
+<ul>
+  <li><span class="inline">MetricType</span>：<span class="mono">SINGLE_TURN</span> / <span class="mono">MULTI_TURN</span>——这条样本是单轮还是多轮（Agent 类多为多轮，<a href="18-agent-metrics-internals.html">第 18 课</a>）。</li>
+  <li><span class="inline">MetricOutputType</span>：<span class="mono">BINARY</span> / <span class="mono">DISCRETE</span> / <span class="mono">CONTINUOUS</span> / <span class="mono">RANKING</span>——输出是 0/1、离散类别、连续值还是排序，优化 / 训练时据此选损失函数（<a href="33-optimization-training.html">第 33 课</a>）。</li>
+</ul>
+<p>另有一个 <span class="inline">ModeMetric</span> 协议（<span class="mono">name + mode</span>），标记那些有 <span class="mono">precision / recall / f1</span> 模式的指标（如 FactualCorrectness、TopicAdherence）。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 经典栈的 required_columns 与 ":optional" / ":ignored" 后缀 <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 用后缀精细声明"吃哪些字段"</div>
+      <div class="a"><span class="inline">Metric</span> 用 <span class="inline">_required_columns</span>（按 <span class="mono">MetricType</span> 分组）声明它需要的字段。字段名可带后缀来表达"可选 / 忽略"：
+<pre class="code"><span class="cm"># 声明：单轮下需要 user_input + response</span>
+_required_columns = {
+    MetricType.SINGLE_TURN: {
+        <span class="st">"user_input"</span>, <span class="st">"response"</span>,
+        <span class="st">"retrieved_contexts:optional"</span>,  <span class="cm"># 有就用，没有也行</span>
+        <span class="st">"reference:ignored"</span>,            <span class="cm"># 打分用不到，忽略</span>
+    }
+}</pre>
+      </div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 两个读取口径不同</div>
+      <div class="a">属性 <span class="inline">required_columns</span> 会<strong>剥掉带后缀的</strong>，只剩硬性必需（这里只剩 <span class="mono">user_input</span> / <span class="mono">response</span>）；而 <span class="inline">get_required_columns(with_optional=True)</span> 会<strong>带上 optional</strong>（去掉 <span class="mono">:optional</span> 后缀）、但仍丢弃 <span class="mono">:ignored</span>。<span class="inline">SingleTurnMetric</span> 据此把样本<strong>裁剪到只剩相关字段</strong>再打分。setter 还会校验字段基名必须属于 <span class="mono">VALID_COLUMNS</span>，否则报错。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  经典栈与两个枚举都在 <span class="mono">src/ragas/metrics/base.py</span>：<span class="mono">Metric</span> / <span class="mono">MetricType</span> / <span class="mono">MetricOutputType</span> / <span class="mono">MetricWithLLM</span> / <span class="mono">MetricWithEmbeddings</span> / <span class="mono">SingleTurnMetric</span> / <span class="mono">MultiTurnMetric</span>，以及现代根基类 <span class="mono">SimpleBaseMetric</span> / <span class="mono">SimpleLLMMetric</span>、协议 <span class="mono">ModeMetric</span> 和投票器 <span class="mono">Ensember</span>；<span class="mono">required_columns</span> 属性与 <span class="mono">get_required_columns</span> 也在此。
+  collections 现代基类在 <span class="mono">src/ragas/metrics/collections/base.py</span>：<span class="mono">BaseMetric(SimpleBaseMetric, NumericValidator)</span>，含 <span class="mono">_validate_llm</span> / <span class="mono">_validate_embeddings</span>。Simple 栈三件套在 <span class="mono">discrete.py</span> / <span class="mono">numeric.py</span> / <span class="mono">ranking.py</span>。导出名单与废弃机制见 <span class="mono">metrics/__init__.py</span>（<span class="mono">__all__</span> 只列基类与 Simple 栈，具名指标进 <span class="mono">_DEPRECATED_METRICS</span> 由 <span class="mono">__getattr__</span> 拦截）。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>一次教科书式的架构迁移</strong>：从"多重继承 + 样本对象"演进到"组件化构造注入 + 关键字参数 + 结构化输出"，是值得学习的演进案例。</li>
+    <li><strong>新旧并存、算法不变</strong>：两套基类承载<strong>同一套打分逻辑</strong>，迁移只换接口和导入路径，分数口径不变，老用户不被一次性打断。</li>
+    <li><strong>把错误前移到构造期</strong>：collections 的 <span class="inline">_validate_llm</span> 只收 <span class="inline">InstructorBaseRagasLLM</span>，传错模型立刻 <span class="mono">ValueError</span>，而不是跑到一半才炸。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>两代族谱：<strong>经典栈</strong> <span class="mono">Metric → MetricWithLLM/Embeddings → SingleTurn/MultiTurnMetric</span>（<span class="mono">single_turn_ascore → float</span>）；<strong>现代栈</strong> <span class="mono">SimpleBaseMetric → SimpleLLMMetric / collections.BaseMetric</span>（<span class="mono">ascore → MetricResult</span>）。</li>
+    <li>两个横切枚举：<span class="mono">MetricType</span>（单 / 多轮）、<span class="mono">MetricOutputType</span>（binary / discrete / continuous / ranking）。</li>
+    <li>经典栈用 <span class="mono">required_columns</span> 配 <span class="mono">:optional</span> / <span class="mono">:ignored</span> 精细声明字段；collections 只认现代 LLM。</li>
+    <li>规范实现走 <span class="mono">collections</span>；下一课拆 <span class="mono">MetricResult</span> 这个"既是分数又是理由"的返回值。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="12-traditional-metrics.html"><div class="dir">← 上一课</div><div class="ttl">传统 / 非 LLM 指标</div></a><a class="next" href="14-metric-result.html"><div class="dir">下一课 →</div><div class="ttl">MetricResult 双重身份</div></a></div>
 </div>

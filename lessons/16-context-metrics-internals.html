@@ -267,9 +267,92 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>Context Precision / Recall 内部</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+检索端的两个指标常被搞混：<strong>ContextPrecision</strong> 看"检索回来的资料质量好不好、相关的有没有排在前面"，<strong>ContextRecall</strong> 看"该检索到的内容是不是都召回了"。本课对照现代 collections 实现，讲清两者各自的算法——平均精度 vs 逐句归因。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  Precision 像评<strong>搜索引擎的排序质量</strong>：返回 10 条，相关的越靠前越好（把"有用的"压在第 8 条是要扣分的）。
+  Recall 像批改时<strong>拿标准答案逐句找出处</strong>：标准答案每写一句，就去检索资料里翻一翻"这句有没有依据"，翻得到的越多说明召回越全。一个看<strong>排序</strong>，一个看<strong>覆盖</strong>。
+</div>
+
+<h2>ContextPrecision：逐条判定 + 平均精度</h2>
+<p><span class="inline">ContextPrecisionWithReference</span> 的 <span class="inline">ascore</span> 对<strong>每条检索结果各问一次 LLM</strong>："这条 context 对得出参考答案有没有用？" 拿到一串 0/1 的 <span class="mono">verdict</span>，再算<strong>平均精度（average precision）</strong>：</p>
+<pre class="code"><span class="cm"># 逐条判定：每个 context 调一次 agenerate</span>
+verdicts = []
+<span class="kw">for</span> context <span class="kw">in</span> retrieved_contexts:
+    input_data = ContextPrecisionInput(question=user_input, context=context, answer=reference)
+    result = <span class="kw">await</span> self.llm.agenerate(self.prompt.to_string(input_data), ContextPrecisionOutput)
+    verdicts.append(result.verdict)         <span class="cm"># 0 / 1</span>
+
+<span class="cm"># 平均精度：相关项越靠前，得分越高</span>
+<span class="kw">def</span> <span class="fn">_calculate_average_precision</span>(self, verdicts):
+    cumsum, numerator = <span class="st">0</span>, <span class="st">0.0</span>
+    <span class="kw">for</span> i, v <span class="kw">in</span> enumerate(verdicts):
+        cumsum += v                          <span class="cm"># 截至第 i 位的命中数</span>
+        <span class="kw">if</span> v:                                <span class="cm"># 只在"命中位"累加 precision@(i+1)</span>
+            numerator += cumsum / (i + <span class="st">1</span>)
+    <span class="kw">return</span> numerator / (cumsum + <span class="st">1e-10</span>)    <span class="cm"># 除以命中总数</span></pre>
+<p>把相关项排在前面，<span class="mono">precision@k</span> 会更高，平均精度也更高——这正是信息检索里经典的 <strong>MAP（mean average precision）</strong>思路。</p>
+<p>两个变体只差"拿什么当判断依据"：<span class="inline">ContextPrecision</span> 等于 <span class="inline">ContextPrecisionWithReference</span>（拿 <span class="mono">reference</span> 比），<span class="inline">ContextUtilization</span> 等于 <span class="inline">ContextPrecisionWithoutReference</span>（没有标准答案时改拿 <span class="mono">response</span> 比），算法完全一样。</p>
+
+<h2>ContextRecall：逐句归因</h2>
+<p><span class="inline">ContextRecall</span> 反过来——把 <span class="mono">reference</span> 拆成一句句陈述，逐句判断<strong>能不能归因到检索到的 context</strong>（<span class="mono">attributed</span> 0/1），再算占比：</p>
+<pre class="code"><span class="cm"># 一次调用拿回所有句子的归因分类</span>
+context = <span class="st">"\n"</span>.join(retrieved_contexts)
+result = <span class="kw">await</span> self.llm.agenerate(self.prompt.to_string(input_data), ContextRecallOutput)
+
+<span class="cm"># 分数 = 能归因的句数 / 总句数</span>
+attributions = [c.attributed <span class="kw">for</span> c <span class="kw">in</span> result.classifications]
+score = sum(attributions) / len(attributions)</pre>
+<p>每个分类项是 <span class="inline">ContextRecallClassification</span>（<span class="mono">statement</span> / <span class="mono">reason</span> / <span class="mono">attributed</span>）。所以 <strong>Recall = 参考答案中能在检索资料里找到出处的句子占比</strong>。</p>
+
+<table class="t">
+  <tr><th>维度</th><th>ContextPrecision</th><th>ContextRecall</th></tr>
+  <tr><td><strong>量什么</strong></td><td>相关资料是否排在前面（排序质量）</td><td>该召回的内容是否都召回了（覆盖）</td></tr>
+  <tr><td><strong>判定对象</strong></td><td>每条 <span class="mono">retrieved_contexts</span></td><td><span class="mono">reference</span> 拆出的每个句子</td></tr>
+  <tr><td><strong>判定问题</strong></td><td>这条 context 对答案有没有用？(<span class="mono">verdict</span>)</td><td>这句能否归因到 context？(<span class="mono">attributed</span>)</td></tr>
+  <tr><td><strong>计分</strong></td><td>平均精度（MAP）</td><td>归因句数 / 总句数</td></tr>
+  <tr><td><strong>LLM 调用</strong></td><td>每条 context 一次</td><td>整体一次</td></tr>
+</table>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 计划里的"多次投票（Ensemble）"——collections 其实没用 <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 ensemble 投票是 legacy 的做法</div>
+      <div class="a">老实现 <span class="mono">_context_precision.py</span> / <span class="mono">_context_recall.py</span> 会用 <span class="inline">prompt.generate_multiple(...)</span> 多次采样，再用 <span class="inline">ensembler.from_discrete(...)</span> 做<strong>多数投票</strong>（<span class="inline">Ensember</span> 定义在 <span class="mono">metrics/base.py</span>，<a href="13-metric-base.html">第 13 课</a>），目的是对抗 LLM 输出的随机性。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 现代 collections 已简化</div>
+      <div class="a">核对规范源码可知：collections 的 <span class="inline">ContextPrecision</span> 对每条 context <strong>只调一次</strong> <span class="mono">agenerate</span>、<span class="inline">ContextRecall</span> <strong>整体只调一次</strong>，<strong>没有</strong> <span class="mono">generate_multiple</span>、<strong>没有</strong> ensemble 投票。更简单、更省 token，稳定性改由 instructor 结构化输出来兜底。所以"多次投票"是<strong>旧栈特性</strong>，讲新栈时不能照搬。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  规范实现在 <span class="mono">src/ragas/metrics/collections/context_precision/metric.py</span>：<span class="mono">ContextPrecisionWithReference</span> / <span class="mono">ContextPrecisionWithoutReference</span> 各含 <span class="mono">_calculate_average_precision</span>，外加薄封装 <span class="mono">ContextPrecision</span>（= WithReference）与 <span class="mono">ContextUtilization</span>（= WithoutReference）；提示与模型在同目录 <span class="mono">util.py</span>（<span class="mono">ContextPrecisionPrompt</span>，输出含 <span class="mono">verdict</span>）。<span class="mono">collections/context_recall/metric.py</span> 的 <span class="mono">ContextRecall</span> 按 <span class="mono">classifications</span> 的 <span class="mono">attributed</span> 计分（<span class="mono">util.py</span> 的 <span class="mono">ContextRecallClassification</span>）。legacy 镜像 <span class="mono">_context_precision.py</span> / <span class="mono">_context_recall.py</span> 用 <span class="mono">generate_multiple</span> + <span class="mono">ensembler</span>，并另有 <span class="mono">NonLLM*</span> / <span class="mono">IDBased*</span> 非 LLM 变体（<a href="12-traditional-metrics.html">第 12 课</a>）。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>复用 IR 经典指标</strong>：把"检索排序好不好"直接落到平均精度（MAP）上，相关项越靠前分越高，含义清晰可解释。</li>
+    <li><strong>precision / recall 对称又互补</strong>：一个逐"条 context"判有用性、一个逐"句 reference"判归因，合起来覆盖检索的"准"与"全"。</li>
+    <li><strong>新栈做了减法</strong>：相比 legacy 的多次采样投票，collections 去掉 ensemble、调用更少——是一处真实的简化，提醒我们"教新栈要看新栈的代码"。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li><strong>Precision 看排序</strong>：逐条判 context 是否有用 → 平均精度（MAP）；<strong>Recall 看覆盖</strong>：逐句判 reference 能否归因 → 归因占比。</li>
+    <li><span class="inline">ContextPrecision</span> = WithReference（比 <span class="mono">reference</span>）；<span class="inline">ContextUtilization</span> = WithoutReference（比 <span class="mono">response</span>）。</li>
+    <li>collections 规范实现<strong>不使用</strong> ensemble 投票（那是 legacy 的做法）——讲新栈以源码为准。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="15-faithfulness-internals.html"><div class="dir">← 上一课</div><div class="ttl">Faithfulness 内部</div></a><a class="next" href="17-answer-metrics-internals.html"><div class="dir">下一课 →</div><div class="ttl">Relevancy / Factual / AspectCritic 内部</div></a></div>
 </div>

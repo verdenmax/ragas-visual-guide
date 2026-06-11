@@ -267,9 +267,92 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>Faithfulness 内部</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+Faithfulness（忠实度）查的是<strong>幻觉</strong>：答案里的每一句，是不是真有检索资料撑腰。它的算法是经典的<strong>两步走</strong>——先把答案拆成一条条"主张（claim）"，再逐条做<strong>NLI 蕴含判断</strong>。本课照着现代 collections 实现，把这条流水线看穿。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  判作业有没有"瞎编"，老师不会整篇笼统打分，而是<strong>先把答案拆成一句句论点</strong>，再拿着<strong>参考资料逐句核对</strong>："这句资料里有→给过；这句资料没提→打叉。"最后<strong>过关句数 ÷ 总句数</strong>就是忠实度。Faithfulness 干的正是这件事。
+</div>
+
+<h2>两步流水线：拆句 → 逐句查证</h2>
+<p>现代实现 <span class="inline">Faithfulness(BaseMetric)</span> 的 <span class="inline">ascore</span> 把整件事切成三段，全程用 instructor LLM 拿结构化结果：</p>
+<pre class="code"><span class="kw">async def</span> <span class="fn">ascore</span>(self, user_input, response, retrieved_contexts):
+    <span class="cm"># ① 拆句：把 response 拆成原子陈述（去代词、可独立理解）</span>
+    statements = <span class="kw">await</span> self._create_statements(user_input, response)
+    <span class="kw">if not</span> statements:
+        <span class="kw">return</span> MetricResult(value=float(<span class="st">"nan"</span>))   <span class="cm"># 拆不出句子</span>
+
+    <span class="cm"># ② 查证：把所有 context 拼一起，逐句做 NLI 判断（verdict 0/1）</span>
+    context_str = <span class="st">"\n"</span>.join(retrieved_contexts)
+    verdicts = <span class="kw">await</span> self._create_verdicts(statements, context_str)
+
+    <span class="cm"># ③ 计分：被支撑的句数 / 总句数</span>
+    score = self._compute_score(verdicts)
+    <span class="kw">return</span> MetricResult(value=float(score))</pre>
+<p>开头还会校验 <span class="mono">user_input</span> / <span class="mono">response</span> / <span class="mono">retrieved_contexts</span>，缺了直接 <span class="mono">ValueError</span>。</p>
+
+<h2>① 拆句：StatementGeneratorPrompt</h2>
+<p>第一步把回答拆成"原子陈述"。要求<strong>不使用代词</strong>，让每句都能脱离上下文独立判断（比如把"他提出了相对论"改写成"爱因斯坦提出了相对论"）：</p>
+<pre class="code"><span class="cm"># _create_statements 内部</span>
+input_data = StatementGeneratorInput(question=question, answer=response)
+prompt_str = self.statement_generator_prompt.to_string(input_data)
+result = <span class="kw">await</span> self.llm.agenerate(prompt_str, StatementGeneratorOutput)
+<span class="kw">return</span> result.statements      <span class="cm"># List[str]：一条条主张</span></pre>
+
+<h2>② 查证：NLIStatementPrompt → 0/1</h2>
+<p>第二步把"所有陈述 + 拼好的 context"交给 NLI 提示：能从 context <strong>直接推出</strong>就判 <span class="mono">verdict=1</span>，否则 <span class="mono">0</span>，并附 <span class="mono">reason</span>：</p>
+<pre class="code"><span class="cm"># _create_verdicts 内部</span>
+input_data = NLIStatementInput(context=context, statements=statements)
+prompt_str = self.nli_statement_prompt.to_string(input_data)
+result = <span class="kw">await</span> self.llm.agenerate(prompt_str, NLIStatementOutput)
+<span class="cm"># result.statements: List[StatementFaithfulnessAnswer(statement, reason, verdict)]</span></pre>
+<p>计分极简：<span class="inline">_compute_score</span> 数出 <span class="mono">verdict</span> 为真的句数，除以总句数。所以 <strong>Faithfulness = 有依据的陈述占比</strong>，落在 0~1。</p>
+
+<table class="t">
+  <tr><th>阶段</th><th>Prompt（输入 → 输出模型）</th><th>产物</th></tr>
+  <tr><td>① 拆句</td><td class="mono">StatementGeneratorPrompt（StatementGeneratorInput → Output）</td><td>原子陈述 <span class="mono">List[str]</span></td></tr>
+  <tr><td>② 查证</td><td class="mono">NLIStatementPrompt（NLIStatementInput → Output）</td><td>每句 <span class="mono">verdict</span> 0/1 + reason</td></tr>
+  <tr><td>③ 计分</td><td>—</td><td><span class="mono">supported / total</span>（0~1）</td></tr>
+</table>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> HHEM 变体：把第②步换成交叉编码器 <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 legacy 里的 FaithfulnesswithHHEM</div>
+      <div class="a">第②步的"逐句 NLI"不一定非得用 LLM。legacy 的 <span class="inline">FaithfulnesswithHHEM</span>（继承自老 <span class="inline">Faithfulness</span>）仍用 LLM 拆句，但把判断换成一个<strong>交叉编码器</strong>模型 <span class="mono">vectara/hallucination_evaluation_model</span>（HuggingFace 的 <span class="mono">AutoModelForSequenceClassification</span>）：对每个 <span class="mono">(context, statement)</span> 对打分、四舍五入成 0/1，再取平均。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 同一算法，不同"裁判"</div>
+      <div class="a">这恰好说明 Faithfulness 的算法骨架（拆句 → 逐句判 → 占比）是稳定的，只是第②步的判断器可换：LLM 提示 vs 专用 NLI 模型。HHEM 变体<strong>只在 legacy</strong>（<span class="mono">_faithfulness.py</span>），需要额外装 <span class="mono">transformers</span>。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  规范实现在 <span class="mono">src/ragas/metrics/collections/faithfulness/metric.py</span>：<span class="mono">Faithfulness(BaseMetric)</span> 的 <span class="mono">ascore</span> 串起 <span class="mono">_create_statements</span> / <span class="mono">_create_verdicts</span> / <span class="mono">_compute_score</span>。Prompt 与数据模型在同目录 <span class="mono">util.py</span>：<span class="mono">StatementGeneratorPrompt</span>（<span class="mono">StatementGeneratorInput</span> / <span class="mono">Output</span>）、<span class="mono">NLIStatementPrompt</span>（<span class="mono">NLIStatementInput</span> / <span class="mono">Output</span>），逐句结果是 <span class="mono">StatementFaithfulnessAnswer</span>（<span class="mono">statement</span> / <span class="mono">reason</span> / <span class="mono">verdict</span> 0/1），都继承 <span class="mono">ragas.prompt.metrics.base_prompt.BasePrompt</span>（<a href="19-prompt-system.html">第 19 课</a>）。legacy 镜像与 HHEM 变体在 <span class="mono">metrics/_faithfulness.py</span>（<span class="mono">FaithfulnesswithHHEM</span>）。用法回顾见 <a href="10-rag-metrics.html">第 10 课</a>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>"拆句 + NLI" 是可复用范式</strong>：同一套 NLI 思路（同名 <span class="inline">NLIStatementPrompt</span>，各指标在自己的 util.py 定义）被 FactualCorrectness 再次借用（<a href="17-answer-metrics-internals.html">第 17 课</a>），只是改成双向核对。</li>
+    <li><strong>原子化让判断更可靠</strong>：先拆成无代词的独立陈述，再逐句查证，比"整段一把抓"更精确，也天然产出可读的 <span class="mono">reason</span>。</li>
+    <li><strong>instructor 结构化输出</strong>：<span class="inline">await llm.agenerate(prompt_str, OutputModel)</span> 直接拿到带 <span class="mono">verdict</span> 字段的对象，省掉手写 JSON 解析。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>忠实度 = <strong>拆句（claim 分解）+ 逐句查证（NLI 判 0/1）+ 占比</strong>，分数 = 被支撑句数 / 总句数。</li>
+    <li>两个提示分工：<span class="mono">StatementGeneratorPrompt</span> 拆句、<span class="mono">NLIStatementPrompt</span> 判蕴含；现代实现用 instructor <span class="mono">agenerate</span> 拿结构化结果。</li>
+    <li>规范实现在 <span class="mono">collections/faithfulness/</span>；legacy 还有用交叉编码器的 <span class="mono">FaithfulnesswithHHEM</span> 变体。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="14-metric-result.html"><div class="dir">← 上一课</div><div class="ttl">MetricResult 双重身份</div></a><a class="next" href="16-context-metrics-internals.html"><div class="dir">下一课 →</div><div class="ttl">Context Precision / Recall 内部</div></a></div>
 </div>

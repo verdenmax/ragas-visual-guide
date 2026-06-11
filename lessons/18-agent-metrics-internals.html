@@ -267,9 +267,95 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>Agent / 多轮指标内部</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+Agent 不是一问一答，而是<strong>多轮 + 调工具</strong>地干活。评它得换一套指标，而且都吃<strong>多轮样本</strong>（<a href="05-multi-turn-sample.html">第 5 课</a> 的消息列表）。本课看四个 collections 指标如何把"Agent 好不好"拆成<strong>工具、目标、话题</strong>几个可测维度。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  评 Agent 像评<strong>一个实习生干一单活</strong>：<strong>工具用对没</strong>（该查天气你别去订餐，参数也别填错）、<strong>目标达成没</strong>（最后真把桌订上了吗）、<strong>有没有跑题</strong>（只准聊业务，别被带去闲扯）。一个维度一把尺子，合起来才看得清这个"实习生"靠不靠谱。
+</div>
+
+<h2>工具维度：ToolCallAccuracy / ToolCallF1（纯规则）</h2>
+<p>这两个指标<strong>不用裁判模型</strong>——虽然也是 collections（继承 <span class="inline">BaseMetric</span>），但纯靠规则比对。它们先从对话的 <span class="inline">AIMessage</span> 里抽出 Agent 实际发起的 <span class="inline">tool_calls</span>，再和 <span class="mono">reference_tool_calls</span> 对：</p>
+<pre class="code"><span class="cm"># ToolCallAccuracy：序列对齐 + 参数精确匹配</span>
+pred = [tc <span class="kw">for</span> m <span class="kw">in</span> user_input
+        <span class="kw">if</span> isinstance(m, AIMessage) <span class="kw">and</span> m.tool_calls
+        <span class="kw">for</span> tc <span class="kw">in</span> m.tool_calls]
+
+aligned = int(self._is_sequence_aligned(            <span class="cm"># strict_order 默认 True：名字顺序要一致</span>
+    [t.name <span class="kw">for</span> t <span class="kw">in</span> pred], [t.name <span class="kw">for</span> t <span class="kw">in</span> reference_tool_calls]))
+score = (参数精确度之和 / len(reference_tool_calls)) * aligned   <span class="cm"># 长度不齐再打覆盖折扣</span></pre>
+<p><span class="inline">ToolCallF1</span> 则把工具调用当成<strong>集合</strong>（名字 + 参数都相同才算一个），用集合运算算 TP/FP/FN 再求 F1：</p>
+<pre class="code"><span class="cm"># ToolCallF1：集合化后算 F1（顺序无关）</span>
+TP = 预测与参考的交集大小      <span class="cm"># actual ∩ expected</span>
+FP = 只出现在预测里的          <span class="cm"># actual − expected（多调了）</span>
+FN = 只出现在参考里的          <span class="cm"># expected − actual（漏调了）</span>
+f1 = calculate_f1_score(TP, FP, FN)</pre>
+<p>区别：<span class="inline">ToolCallAccuracy</span> 在意<strong>顺序与参数</strong>（默认 <span class="mono">strict_order=True</span>），<span class="inline">ToolCallF1</span> 把调用看成无序集合、只问"该调的调了没、有没有多调"。</p>
+
+<h2>目标维度：AgentGoalAccuracy（LLM，0/1）</h2>
+<p>判"这单活到底办成没"。先让 LLM 从整段对话<strong>推断最终状态</strong>，再判断是否达成，输出二元 0/1。分有无参考两种：</p>
+<pre class="code"><span class="cm"># WithReference：拿外部给的 reference 当目标</span>
+workflow = <span class="kw">await</span> self._infer_goal_outcome(conversation)   <span class="cm"># 推断 end_state</span>
+verdict  = <span class="kw">await</span> self._compare_outcomes(reference, workflow.end_state)
+
+<span class="cm"># WithoutReference：连"用户想要什么"都由 LLM 从对话里推</span>
+workflow = <span class="kw">await</span> self._infer_goal_outcome(conversation)   <span class="cm"># 推断 user_goal + end_state</span>
+verdict  = <span class="kw">await</span> self._compare_outcomes(workflow.user_goal, workflow.end_state)</pre>
+<p><span class="inline">AgentGoalAccuracy</span> 是 <span class="inline">AgentGoalAccuracyWithReference</span> 的别名。有参考时拿你给的 <span class="mono">reference</span> 当标准答案，无参考时连用户目标也让模型从对话里推断出来再比。</p>
+
+<h2>话题维度：TopicAdherence（LLM，P/R/F1）</h2>
+<p>判"有没有守在允许的话题里"。给一组 <span class="mono">reference_topics</span>，指标分四步：抽话题 → 看每个话题<strong>答了还是拒答</strong> → 判每个话题<strong>是否在允许范围内</strong> → 按 <span class="inline">mode</span>（默认 f1）算 P/R/F1：</p>
+<pre class="code">topics      = <span class="kw">await</span> self._extract_topics(conversation)            <span class="cm"># 对话里聊了哪些话题</span>
+answered    = <span class="kw">await</span> self._check_topics_answered(conversation, topics) <span class="cm"># 答了(True)/拒答(False)</span>
+classified  = <span class="kw">await</span> self._classify_topics(reference_topics, topics)   <span class="cm"># 是否属于允许话题</span>
+<span class="cm"># TP=答了且该答, FP=答了却不该答（跑题）, FN=该答却拒答 → precision/recall/f1</span></pre>
+
+<table class="t">
+  <tr><th>指标</th><th>评什么</th><th>靠 LLM?</th><th>关键输入</th><th>计分</th></tr>
+  <tr><td class="mono">ToolCallAccuracy</td><td>工具调用对不对（顺序 + 参数）</td><td>否（规则）</td><td class="mono">user_input + reference_tool_calls</td><td>参数精度 × 序列对齐</td></tr>
+  <tr><td class="mono">ToolCallF1</td><td>工具调用集合的 F1</td><td>否（规则）</td><td class="mono">user_input + reference_tool_calls</td><td>集合 TP/FP/FN → F1</td></tr>
+  <tr><td class="mono">AgentGoalAccuracy</td><td>是否达成用户目标</td><td>是</td><td class="mono">user_input（+ reference）</td><td>0 / 1</td></tr>
+  <tr><td class="mono">TopicAdherence</td><td>是否守在允许话题内</td><td>是</td><td class="mono">user_input + reference_topics</td><td>P / R / F1</td></tr>
+</table>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 为什么有的 Agent 指标不用 LLM？ <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 能用规则就别请裁判</div>
+      <div class="a">工具调用是<strong>结构化</strong>的（名字 + 参数字典），"对不对"可以直接比对，不存在语义模糊。所以 <span class="inline">ToolCallAccuracy</span> / <span class="inline">ToolCallF1</span> 走纯规则：<strong>零 token、确定可复现、还快</strong>。而"目标有没有达成""跑没跑题"涉及语义理解，才请 LLM 当裁判。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 都吃多轮消息</div>
+      <div class="a">四个指标的 <span class="mono">user_input</span> 都是一<strong>列消息</strong>（<span class="mono">HumanMessage</span> / <span class="mono">AIMessage</span> / <span class="mono">ToolMessage</span>，来自 <span class="mono">ragas.messages</span>），正是 <span class="inline">MultiTurnSample</span> 承载的那串对话（<a href="05-multi-turn-sample.html">第 5 课</a>）。工具调用从 <span class="mono">AIMessage.tool_calls</span> 里取。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  规范实现都在 <span class="mono">src/ragas/metrics/collections/</span>：<span class="mono">tool_call_accuracy/metric.py</span>（<span class="mono">ToolCallAccuracy</span>，<span class="mono">strict_order</span> + <span class="mono">_is_sequence_aligned</span>，<span class="mono">util.py</span> 的 <span class="mono">exact_match_args</span>）、<span class="mono">tool_call_f1/metric.py</span>（<span class="mono">ToolCallF1</span>，<span class="mono">util.py</span> 的 <span class="mono">tool_call_to_hashable</span> / <span class="mono">calculate_f1_score</span>）、<span class="mono">agent_goal_accuracy/metric.py</span>（<span class="mono">AgentGoalAccuracyWithReference</span> / <span class="mono">WithoutReference</span>，<span class="mono">AgentGoalAccuracy</span> 是前者别名；提示 <span class="mono">InferGoalOutcomePrompt</span> / <span class="mono">CompareOutcomePrompt</span>）、<span class="mono">topic_adherence/metric.py</span>（<span class="mono">TopicAdherence</span>，<span class="mono">mode</span> 默认 f1；三个提示 <span class="mono">TopicExtraction</span> / <span class="mono">TopicRefused</span> / <span class="mono">TopicClassification</span>）。消息类型在 <span class="mono">ragas/messages.py</span>，多轮样本见 <span class="mono">dataset_schema.py</span> 的 <span class="mono">MultiTurnSample</span>。legacy 镜像在 <span class="mono">_tool_call_accuracy.py</span> / <span class="mono">_tool_call_f1.py</span> / <span class="mono">_goal_accuracy.py</span> / <span class="mono">_topic_adherence.py</span>。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>把"Agent 好不好"拆成可测维度</strong>：工具（用对没）、目标（成了没）、话题（跑没跑），各自一个指标，比一个笼统分更可诊断。</li>
+    <li><strong>规则与 LLM 各司其职</strong>：结构化的工具调用用规则（省钱可复现），语义性的目标 / 话题才上 LLM——成本与准确度的务实取舍。</li>
+    <li><strong>P/R/F1 范式再次复用</strong>：TopicAdherence 又把"答了 / 该答"映射成 TP/FP/FN（呼应 <a href="17-answer-metrics-internals.html">第 17 课</a>），同一套分类指标思路贯穿全书。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>Agent 评测靠<strong>多轮样本 + 多维度指标</strong>：工具（ToolCallAccuracy / ToolCallF1）、目标（AgentGoalAccuracy）、话题（TopicAdherence）。</li>
+    <li>工具类指标<strong>纯规则、不用 LLM</strong>（顺序 + 参数 / 集合 F1）；目标与话题类才用 LLM 当裁判。</li>
+    <li><span class="inline">AgentGoalAccuracy</span> = <span class="inline">WithReference</span> 别名，另有 <span class="inline">WithoutReference</span>；TopicAdherence 用 <span class="mono">reference_topics</span> + <span class="mono">mode</span>（默认 f1）。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="17-answer-metrics-internals.html"><div class="dir">← 上一课</div><div class="ttl">Relevancy / Factual / AspectCritic 内部</div></a><a class="next" href="19-prompt-system.html"><div class="dir">下一课 →</div><div class="ttl">Prompt 系统：PydanticPrompt</div></a></div>
 </div>

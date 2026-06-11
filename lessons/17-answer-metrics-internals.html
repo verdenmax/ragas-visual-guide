@@ -267,9 +267,105 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>Relevancy / Factual / AspectCritic 内部</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+本课看三个"把主观判断算法化"的巧思：<strong>AnswerRelevancy</strong> 反向出题、<strong>FactualCorrectness</strong> 双向对照、<strong>AspectCritic</strong> 一句话造裁判。前两个在现代 collections，第三个目前<strong>只有 legacy 版</strong>——正好对比两代写法。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  三种判法像三种老师：<strong>反向出题</strong>的老师看你答案，反推"这是在回答什么问题"，再看跟原题像不像（跑题了反推出来的问题就对不上）；<strong>双向对照</strong>的老师把你的答案和标准答案<strong>互相</strong>逐条核对，既查你"多说了假的"、也查你"漏说了真的"；<strong>一句话裁判</strong>的老师只需你给一句标准（"有没有害？"），他就照着判 Yes/No。
+</div>
+
+<h2>AnswerRelevancy：反向出题 + 余弦相似度</h2>
+<p>切题与否不好直接打分，于是<strong>反过来</strong>：让 LLM 从 <span class="mono">response</span> 反推出若干个"它像在回答的问题"，再和原始 <span class="mono">user_input</span> 比<strong>余弦相似度</strong>。反推次数由 <span class="inline">strictness</span> 控制（<strong>默认 3</strong>）：</p>
+<pre class="code"><span class="kw">for</span> _ <span class="kw">in</span> range(self.strictness):           <span class="cm"># strictness 默认 3</span>
+    result = <span class="kw">await</span> self.llm.agenerate(
+        self.prompt.to_string(AnswerRelevanceInput(response=response)),
+        AnswerRelevanceOutput)
+    generated_questions.append(result.question)
+    noncommittal_flags.append(result.noncommittal)   <span class="cm"># 是否敷衍/答非所问</span>
+
+all_noncommittal = np.all(noncommittal_flags)
+<span class="cm"># 原问题 vs 反推问题，求平均余弦相似度</span>
+score = cosine_sim.mean() * int(<span class="kw">not</span> all_noncommittal)   <span class="cm"># 全敷衍 → 直接 0 分</span></pre>
+<p>两个要点：① 构造时<strong>必须给 embeddings</strong>（<a href="22-embedding-abstraction.html">第 22 课</a>），因为要做向量相似度；② <span class="mono">noncommittal</span>（敷衍/"我不知道"）惩罚——只要全部反推都被判为敷衍，<strong>分数直接归零</strong>。</p>
+
+<h2>FactualCorrectness：双向 NLI → P/R/F1</h2>
+<p>事实一致度把 Faithfulness 的"拆句 + NLI"（<a href="15-faithfulness-internals.html">第 15 课</a>）升级成<strong>双向</strong>核对，再套上分类指标的 TP/FP/FN：</p>
+<pre class="code"><span class="cm"># ① 拆 response 的 claim，逐条对 reference 做 NLI</span>
+reference_response = <span class="kw">await</span> self._decompose_and_verify_claims(response, reference)
+<span class="cm"># ② 非 precision 模式：再拆 reference，对 response 做 NLI（反方向）</span>
+<span class="kw">if</span> self.mode != <span class="st">"precision"</span>:
+    response_reference = <span class="kw">await</span> self._decompose_and_verify_claims(reference, response)
+
+tp = int(np.sum(reference_response))    <span class="cm"># 答案里有据可查的 claim</span>
+fp = int(np.sum(~reference_response))   <span class="cm"># 答案里查无实据（多说的假话）</span>
+fn = int(np.sum(~response_reference))   <span class="cm"># 标准答案里没被覆盖（漏说的真话）</span>
+
+<span class="kw">if</span>   self.mode == <span class="st">"precision"</span>: score = tp / (tp + fp + <span class="st">1e-8</span>)
+<span class="kw">elif</span> self.mode == <span class="st">"recall"</span>:    score = tp / (tp + fn + <span class="st">1e-8</span>)
+<span class="kw">else</span>:                          score = fbeta_score(tp, fp, fn, self.beta)  <span class="cm"># f1</span></pre>
+<p><span class="inline">mode</span> 默认 <span class="mono">"f1"</span>、<span class="inline">beta</span> 默认 <span class="mono">1.0</span>（<span class="mono">beta&gt;1</span> 偏召回、<span class="mono">&lt;1</span> 偏精确）。precision 只做正方向、不算 <span class="mono">fn</span>；recall / f1 才跑双向。它在自己的 <span class="mono">util.py</span> 里定义了同名的 <span class="inline">NLIStatementPrompt</span>（与 Faithfulness 同范式、各自一份）。</p>
+
+<h2>AspectCritic：一句话定义一个裁判（legacy-only）</h2>
+<p>最灵活的一个：你给一句<strong>自然语言定义</strong>，它就照着判 0/1。注意它<strong>尚未迁移到 collections</strong>——只能从 <span class="mono">ragas.metrics</span> 导入（会触发废弃告警），底层还是经典栈：</p>
+<pre class="code"><span class="kw">from</span> ragas.metrics <span class="kw">import</span> AspectCritic   <span class="cm"># ⚠️ 仅 legacy，collections 暂无</span>
+
+harmfulness = AspectCritic(
+    name=<span class="st">"harmfulness"</span>,
+    definition=<span class="st">"答案是否可能对个人或群体造成伤害？"</span>,  <span class="cm"># 一句话造一个指标</span>
+    llm=llm,
+)
+<span class="cm"># 内部把 definition 拼进指令：</span>
+<span class="cm"># "...Use only 'Yes' (1) and 'No' (0) as verdict.\nCriteria Definition: {definition}"</span>
+<span class="cm"># 输出 AspectCriticOutput(reason, verdict 0/1)；strictness>1 时多次采样取多数（Counter）</span></pre>
+<p><span class="inline">AspectCritic(MetricWithLLM, SingleTurnMetric, MultiTurnMetric)</span> 同时支持单 / 多轮（两套 <span class="mono">PydanticPrompt</span>），<span class="inline">strictness</span> 默认 1 且会被强制成奇数（便于投票）。库里预置了 <span class="mono">harmfulness</span> / <span class="mono">maliciousness</span> / <span class="mono">coherence</span> / <span class="mono">correctness</span> / <span class="mono">conciseness</span> 几个现成裁判。</p>
+
+<table class="t">
+  <tr><th>指标</th><th>思路</th><th>关键输入</th><th>输出</th><th>栈</th></tr>
+  <tr><td class="mono">AnswerRelevancy</td><td>反向出题 + 余弦相似度（+敷衍惩罚）</td><td class="mono">user_input + response（+ embeddings）</td><td>0~1</td><td>collections</td></tr>
+  <tr><td class="mono">FactualCorrectness</td><td>双向 NLI → TP/FP/FN → P/R/F1</td><td class="mono">response + reference</td><td>0~1</td><td>collections</td></tr>
+  <tr><td class="mono">AspectCritic</td><td>一句话 definition 当裁判</td><td class="mono">definition + 样本字段</td><td>0 / 1</td><td><strong>legacy-only</strong></td></tr>
+</table>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> 为什么 AnswerRelevancy 要"反向"出题？ <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 正面打"切题分"很主观</div>
+      <div class="a">直接问 LLM"这答案切题吗"既主观又难量化。反向生成把它转成<strong>可计算</strong>的问题：如果答案真的在回答原问题，那么"从答案反推出来的问题"就应该和原问题<strong>语义相近</strong>（余弦相似度高）。跑题或答非所问，反推出来的问题就对不上，相似度自然低。</div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 敷衍要单独惩罚</div>
+      <div class="a">"我不确定 / 无可奉告"这类敷衍回答，反推出来的问题可能恰好和原题接近，相似度并不低。所以单设 <span class="mono">noncommittal</span> 标志：一旦反推全被判为敷衍，直接 <span class="mono">× 0</span>，避免"敷衍也能得高分"。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  <span class="mono">src/ragas/metrics/collections/answer_relevancy/metric.py</span>：<span class="mono">AnswerRelevancy(BaseMetric)</span>，构造需 <span class="mono">llm</span> + <span class="mono">embeddings</span>，<span class="mono">strictness</span> 默认 3，提示 <span class="mono">AnswerRelevancePrompt</span>（输出含 <span class="mono">question</span> / <span class="mono">noncommittal</span>）。
+  <span class="mono">collections/factual_correctness/metric.py</span>：<span class="mono">FactualCorrectness(BaseMetric)</span>，<span class="mono">mode</span>（precision / recall / f1，默认 f1）+ <span class="mono">beta</span>（默认 1.0）+ <span class="mono">atomicity</span> / <span class="mono">coverage</span>，串 <span class="mono">_decompose_and_verify_claims</span>，分数走 <span class="mono">metrics/utils.py</span> 的 <span class="mono">fbeta_score</span>；提示在同目录 <span class="mono">util.py</span>（<span class="mono">ClaimDecompositionPrompt</span> / <span class="mono">NLIStatementPrompt</span>）。
+  AspectCritic <strong>只有 legacy</strong>：<span class="mono">metrics/_aspect_critic.py</span> 的 <span class="mono">AspectCritic(MetricWithLLM, SingleTurnMetric, MultiTurnMetric)</span>，含 <span class="mono">definition</span> / <span class="mono">strictness</span> / <span class="mono">_compute_score</span>、<span class="mono">SingleTurnAspectCriticPrompt</span> / <span class="mono">MultiTurnAspectCriticPrompt</span>、<span class="mono">AspectCriticOutput</span>（<span class="mono">verdict</span> 0/1）——不在 <span class="mono">collections/__init__.py</span> 的 <span class="mono">__all__</span> 里（<a href="09-metrics-overview.html">第 9 课</a>）。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>反向生成的巧思</strong>：把"切不切题"这种主观判断，转成"反推问题 vs 原问题"的余弦相似度，既可量化又自带敷衍惩罚。</li>
+    <li><strong>双向 NLI 统一 P/R/F1</strong>：正向查"多说的假话"（精确率），反向查"漏说的真话"（召回率），用 <span class="inline">fbeta_score</span> 一把收口，<span class="mono">beta</span> 还能调侧重。</li>
+    <li><strong>AspectCritic 让你"一句话造指标"</strong>：自然语言 <span class="inline">definition</span> 即评判标准，是把领域规则快速指标化的利器；只是它还停在经典栈。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li>三种把主观判断算法化的思路：<strong>反向出题</strong>（Relevancy）、<strong>双向对照</strong>（Factual）、<strong>一句话裁判</strong>（AspectCritic）。</li>
+    <li>AnswerRelevancy <span class="mono">strictness</span> 默认 3、需 <span class="mono">embeddings</span>、全敷衍则 0 分；FactualCorrectness <span class="mono">mode</span> 默认 f1、<span class="mono">beta</span> 默认 1.0。</li>
+    <li>AspectCritic <strong>只有 legacy 版</strong>（<span class="mono">from ragas.metrics import AspectCritic</span>，会告警），尚未迁移到 collections。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="16-context-metrics-internals.html"><div class="dir">← 上一课</div><div class="ttl">Context Precision / Recall 内部</div></a><a class="next" href="18-agent-metrics-internals.html"><div class="dir">下一课 →</div><div class="ttl">Agent / 多轮指标内部</div></a></div>
 </div>

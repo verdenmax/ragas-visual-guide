@@ -267,9 +267,88 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <h1>MetricResult 双重身份</h1>
   </div>
   
-<p class="lead">（建设中）本课内容稍后填充。</p>
-<div class="card analogy"><div class="tag">🧩 生活类比</div>占位。</div>
-<div class="card key"><div class="tag">✅ 本课要点</div><ul><li>占位。</li></ul></div>
+<p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
+现代指标 <span class="inline">ascore()</span> 不返回一个裸 <span class="mono">float</span>，而是返回一个 <span class="inline">MetricResult</span>。它有<strong>双重身份</strong>：对外像个普通数字（能比大小、能参与运算、能塞进 pydantic 模型），对内却始终带着<strong>评语（reason）</strong>。本课拆开这个小而精的对象。
+</p>
+
+<div class="card analogy">
+  <div class="tag">🧩 生活类比</div>
+  <span class="inline">MetricResult</span> 像一张<strong>成绩条</strong>：正面印着<strong>分数</strong>（0.83），背面写着<strong>评语</strong>（"4 句里有 1 句没依据"）。你算平均分时它就当数字用，存档时连分数带评语一起收好。比起只给个冷冰冰的数字，这张成绩条让你<strong>既能统计、又能复盘</strong>。
+</div>
+
+<h2>核心：value + reason（+ traces）</h2>
+<p>构造很朴素——一个值、一段理由，外加可选的 <span class="inline">traces</span>（只允许 <span class="mono">input</span> / <span class="mono">output</span> 两个键）：</p>
+<pre class="code"><span class="kw">from</span> ragas.metrics.result <span class="kw">import</span> MetricResult
+
+r = MetricResult(value=<span class="st">0.83</span>, reason=<span class="st">"4 句陈述里 3 句有上下文支撑"</span>)
+print(r.value)    <span class="cm"># 0.83  ← 原始分数</span>
+print(r.reason)   <span class="cm"># '4 句陈述里 3 句有上下文支撑'  ← 为什么是这个分</span>
+print(r)          <span class="cm"># MetricResult(value=0.83, reason='…')</span></pre>
+<p><span class="inline">value</span> 是只读属性，可以是 <span class="mono">float</span>（数值指标）、<span class="mono">str</span>（离散指标）或 <span class="mono">list</span>（排序指标）——<span class="inline">MetricResult</span> 对三种 Simple 栈输出通吃。</p>
+
+<h2>身份一：像个数字用</h2>
+<p>靠一组运算符重载，<span class="inline">MetricResult</span> 能<strong>直接当数值参与计算和比较</strong>，无需先 <span class="mono">.value</span> 解包：</p>
+<pre class="code">a = MetricResult(value=<span class="st">0.8</span>)
+b = MetricResult(value=<span class="st">0.6</span>)
+
+float(a)           <span class="cm"># 0.8   ← __float__</span>
+(a + b) / <span class="st">2</span>        <span class="cm"># 0.7   ← __add__ / __truediv__</span>
+a &gt; b              <span class="cm"># True  ← __gt__</span>
+a == <span class="st">0.8</span>           <span class="cm"># True  ← __eq__（也能和裸数字比）</span>
+sum([a, b])        <span class="cm"># 1.4   ← __radd__ 让内置 sum() 也能用</span></pre>
+<p>它还重载了 <span class="inline">__int__</span> / <span class="inline">__sub__</span> / <span class="inline">__mul__</span> 等，并对 <span class="mono">list</span> 结果提供 <span class="inline">__getitem__</span> / <span class="inline">__iter__</span> / <span class="inline">__len__</span>。要注意：对<strong>非数值</strong>的值做数学运算会抛 <span class="mono">TypeError</span>（比如对字符串结果求 <span class="mono">float()</span>）。</p>
+
+<h2>身份二：能进 pydantic、能序列化</h2>
+<p>评测结果常要嵌进 pydantic 模型里随结果集落盘。<span class="inline">MetricResult</span> 实现了 <span class="inline">__get_pydantic_core_schema__</span>，于是能<strong>直接当字段类型</strong>，且区分两种序列化口径：</p>
+<pre class="code"><span class="kw">from</span> pydantic <span class="kw">import</span> BaseModel
+
+<span class="kw">class</span> <span class="fn">Row</span>(BaseModel):
+    score: MetricResult            <span class="cm"># 直接拿它当字段类型</span>
+
+row = Row(score=MetricResult(value=<span class="st">0.83</span>, reason=<span class="st">"…"</span>))
+row.model_dump()        <span class="cm"># {'score': MetricResult(...)}  保留对象（Python 口径）</span>
+row.model_dump_json()   <span class="cm"># {"score": {"value": 0.83, "reason": "…"}}  走 __json__</span></pre>
+<p>核心 schema 用一个序列化函数分流：<span class="mono">mode == "json"</span> 时调用 <span class="inline">__json__()</span> 转成 <span class="mono">{value, reason}</span> 字典；普通 <span class="inline">model_dump()</span> 则原样保留对象，方便后续还能取 <span class="mono">.reason</span>。另有 <span class="inline">to_dict()</span> 返回 <span class="mono">{"result": value, "reason": reason}</span>。</p>
+
+<details class="accordion">
+  <summary><span class="badge-num">1</span> __getattr__ 转发：为什么字符串结果还能调 .upper() <span class="hint">点击展开详解</span></summary>
+  <div class="acc-body">
+    <div class="qa">
+      <div class="q">🧪 把方法转发给内部值</div>
+      <div class="a"><span class="inline">MetricResult.__getattr__</span> 会把"自己没有的属性"转发给内部的 <span class="inline">_value</span>。所以离散结果（字符串）能直接调字符串方法、排序结果（列表）能调列表方法。若方法返回的还是<strong>同类型</strong>，会再包一层 <span class="mono">MetricResult</span>（保留原 <span class="mono">reason</span>）：
+<pre class="code">r = MetricResult(value=<span class="st">"pass"</span>, reason=<span class="st">"符合标准"</span>)
+r.upper()          <span class="cm"># MetricResult(value='PASS', reason='符合标准')</span></pre>
+      </div>
+    </div>
+    <div class="qa">
+      <div class="q">✅ 一个对象，多种形态</div>
+      <div class="a">数值结果能算数、离散结果能用字符串方法、排序结果能索引迭代——全靠运算符重载 + 属性转发。你几乎可以把它"当成内部值本身"来用，需要解释时再读 <span class="mono">.reason</span>。</div>
+    </div>
+  </div>
+</details>
+
+<div class="card detail">
+  <div class="tag">🔬 源码对应</div>
+  全部在 <span class="mono">src/ragas/metrics/result.py</span> 的 <span class="mono">MetricResult</span> 一个类里：构造接收 <span class="mono">value</span> / <span class="mono">reason</span> / <span class="mono">traces</span>（<span class="mono">traces</span> 仅允许 <span class="mono">input</span> / <span class="mono">output</span> 键）；只读属性 <span class="mono">value</span>；数值身份靠 <span class="mono">__float__</span> / <span class="mono">__int__</span> 与 <span class="mono">__add__</span> / <span class="mono">__radd__</span> / <span class="mono">__sub__</span> / <span class="mono">__mul__</span> / <span class="mono">__truediv__</span> 及比较 <span class="mono">__eq__</span> / <span class="mono">__lt__</span> …；容器身份靠 <span class="mono">__getitem__</span> / <span class="mono">__iter__</span> / <span class="mono">__len__</span>；属性转发靠 <span class="mono">__getattr__</span>；序列化靠 <span class="mono">to_dict</span> / <span class="mono">__json__</span> / <span class="mono">__get_pydantic_core_schema__</span>。collections 指标的 <span class="mono">ascore</span> 正是返回它（见 <a href="15-faithfulness-internals.html">第 15 课</a> 的 Faithfulness）。
+</div>
+
+<div class="card spark">
+  <div class="tag">💡 设计亮点</div>
+  <ul>
+    <li><strong>一个对象同时是"可运算数值"和"可解释理由"</strong>：<span class="inline">__float__</span> 让它进得了数学公式，<span class="inline">__get_pydantic_core_schema__</span> 让它进得了数据模型，而 <span class="inline">reason</span> 始终不丢。</li>
+    <li><strong>无侵入替换裸数字</strong>：因为重载了运算符与比较，已有按 <span class="mono">float</span> 写的聚合代码几乎不用改就能接收 <span class="mono">MetricResult</span>。</li>
+    <li><strong>双口径序列化</strong>：<span class="inline">model_dump()</span> 留对象、<span class="inline">model_dump_json()</span> 转字典，既方便内存里继续用，又方便落盘。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <div class="tag">✅ 本课要点</div>
+  <ul>
+    <li><span class="inline">MetricResult</span> = <strong>value（分数）+ reason（评语）</strong>（+ 可选 traces），是现代 <span class="inline">ascore()</span> 的统一返回值。</li>
+    <li>靠运算符重载，它<strong>能当数字直接算 / 比较 / sum()</strong>；靠 pydantic 核心 schema，它能<strong>嵌进模型并序列化</strong>。</li>
+    <li>"分数带 why" 是 ragas <strong>可解释性</strong>的关键——既能统计，又能复盘为什么得这个分。</li>
+  </ul>
+</div>
 
   <div class="footnav"><a class="prev" href="13-metric-base.html"><div class="dir">← 上一课</div><div class="ttl">Metric 基类体系</div></a><a class="next" href="15-faithfulness-internals.html"><div class="dir">下一课 →</div><div class="ttl">Faithfulness 内部</div></a></div>
 </div>
