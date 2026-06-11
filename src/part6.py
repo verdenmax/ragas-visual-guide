@@ -1,4 +1,4 @@
-"""Content for part6 (stub)."""
+"""Content for part6 — 第六部分 · 测试集生成（25-30）."""
 
 LESSON_25 = r"""
 <p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">

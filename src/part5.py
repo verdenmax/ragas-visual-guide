@@ -1,4 +1,4 @@
-"""Content for part5 (stub)."""
+"""Content for part5 — 第五部分 · 引擎与基础设施（19-24）."""
 
 LESSON_19 = r"""
 <p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">

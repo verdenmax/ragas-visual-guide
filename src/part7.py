@@ -1,4 +1,4 @@
-"""Content for part7 (stub)."""
+"""Content for part7 — 第七部分 · 实验与工程化（31-37）."""
 
 LESSON_31 = r"""
 <p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">

@@ -1,4 +1,4 @@
-"""Content for part4 (stub)."""
+"""Content for part4 — 第四部分 · 指标内部（13-18）."""
 
 LESSON_13 = r"""
 <p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">

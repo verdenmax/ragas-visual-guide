@@ -1,4 +1,4 @@
-"""Content for part1 (stub)."""
+"""Content for part1 — 第一部分 · 宏观全景（01-03）."""
 
 LESSON_01 = r"""
 <p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">

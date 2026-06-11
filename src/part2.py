@@ -1,4 +1,4 @@
-"""Content for part2 (stub)."""
+"""Content for part2 — 第二部分 · 数据与入口（04-08）."""
 
 LESSON_04 = r"""
 <p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">

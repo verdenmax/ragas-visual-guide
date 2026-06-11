@@ -1,4 +1,4 @@
-"""Content for part3 (stub)."""
+"""Content for part3 — 第三部分 · 指标用法（09-12）."""
 
 LESSON_09 = r"""
 <p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
