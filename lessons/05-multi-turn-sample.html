@@ -346,7 +346,35 @@ print(sample.pretty_repr())   <span class="cm"># 打印成可读的多轮对话<
     <li>消息是 <strong>Agent / 多轮指标</strong>的评测载体（<a href="18-agent-metrics-internals.html">第 18 课</a>深入）。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. 为什么 <code>MultiTurnSample</code> 把消息顺序校验放在 <code>field_validator</code>（构造对象时执行）里？</div>
+  <ol class="opts">
+    <li>为了把错误推迟到评测中途才暴露</li>
+    <li>让「工具结果凭空出现」「对话顺序错乱」等问题在造样本阶段就报错，错误前移、定位更快</li>
+    <li>为了加快评测的执行速度</li>
+    <li>因为 pydantic 不允许其他写法</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。<code>field_validator</code> 在构造对象时立即执行，脏数据在「造样本」阶段就抛 <code>ValueError</code>，而不是拖到评测半途因脏数据中断。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. ragas 的消息没有 <code>tool_call_id</code>，它靠什么把 <code>AIMessage.tool_calls</code> 和随后的 <code>ToolMessage</code> 配对？</div>
+  <ol class="opts">
+    <li>靠消息出现的先后顺序——<code>ToolMessage</code> 紧跟在带 <code>tool_calls</code> 的 <code>AIMessage</code> 之后</li>
+    <li>靠对工具名做哈希匹配</li>
+    <li>靠消息的时间戳</li>
+    <li>靠每条消息里的唯一 ID 字段</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。ragas 消息不带 <code>tool_call_id</code>，调用与结果靠出现顺序配对；<code>field_validator</code> 校验 <code>ToolMessage</code> 必须紧跟「带 <code>tool_calls</code> 的 <code>AIMessage</code>」或「另一个 <code>ToolMessage</code>」，从而保证配对合法。</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="04-single-turn-sample.html"><div class="dir">← 上一课</div><div class="ttl">数据模型①：SingleTurnSample</div></a><a class="next" href="06-two-datasets.html"><div class="dir">下一课 →</div><div class="ttl">两个 Dataset 之辨</div></a></div>
 </div>
 

@@ -341,7 +341,41 @@ print(exp)   <span class="cm"># Experiment(name=..., len=...)，结果已存进 
     <li>工作流：<strong>改动 → 跑实验 → 对比</strong>（必要时 <span class="inline">version_experiment</span> 钉住代码版本）。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. <code>@experiment</code> 的 <code>arun</code> 跑完后会自动把每行结果存进 backend，这体现了什么设计理念？</div>
+  <ol class="opts">
+    <li>为了让结果无法被读取</li>
+    <li>因为不存盘就没法并发执行</li>
+    <li>experiments-first：每次改动都留下可对比的记录，便于一版版迭代回看</li>
+    <li>为了尽量占满磁盘空间</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：C</strong>。评测只「打一次分」，实验把「改动 → 跑分 → 留痕对比」固化成闭环；自动落盘让每次实验登记在册，方便回看哪次改动更好。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. <code>version_experiment(name)</code> 会用 GitPython 提交改动并建分支，目的是什么？</div>
+  <ol class="opts">
+    <li>加快实验的运行速度</li>
+    <li>自动把代码部署到生产环境</li>
+    <li>把每个实验钉在确切的代码快照上，随时回溯「这次实验对应哪段代码」</li>
+    <li>删除所有未提交的改动</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：C</strong>。<code>version_experiment</code> 暂存改动、提交一次并建 <code>ragas/{name}</code> 分支、返回 commit hash，让实验与 git 版本绑定，实现可复现、可回溯。</div></div></div>
+  </details>
+</div>
+<div class="card spark">
+  <div class="tag">💭 发散思考（没有标准答案，动手或动脑想想）</div>
+  <ul>
+    <li>为同一个 RAG 应用设计两版改动（例如换 embedding 模型、调 chunk 大小），描述你会怎么用 <code>@experiment</code> + <code>version_experiment</code> 跑出两次可对比、可回溯到代码的实验。</li>
+  </ul>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="07-evaluate.html"><div class="dir">← 上一课</div><div class="ttl">经典入口 evaluate()</div></a><a class="next" href="09-metrics-overview.html"><div class="dir">下一课 →</div><div class="ttl">内置指标全景</div></a></div>
 </div>
 

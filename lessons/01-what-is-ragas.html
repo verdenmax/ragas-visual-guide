@@ -342,7 +342,41 @@ print(score.value, score.reason)  <span class="cm"># 'accurate' + 给分理由</
     <li>下一课拉远镜头，看看这些能力散落在 <span class="mono">src/ragas</span> 的哪些子包里。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. ragas 把「评测」重塑成「做实验」（experiments-first），核心是为了解决什么问题？</div>
+  <ol class="opts">
+    <li>让评测跑得更快、消耗更少 token</li>
+    <li>让测试集可以自动生成</li>
+    <li>让指标不再需要 LLM 当裁判</li>
+    <li>让每次改动都能跑分、并留下可对比的记录，支撑持续迭代</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。vibe check 的毛病是主观、不可复现；experiments-first 把「改动 → 跑分 → 对比」固化成闭环，每次迭代都有据可查。速度 / token、裁判、造数据都不是它要解决的核心痛点。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. 为什么说「我觉得还行」（vibe check）式的判断需要被 ragas 取代？</div>
+  <ol class="opts">
+    <li>因为 LLM 的输出总是错的</li>
+    <li>因为这样能显著省钱</li>
+    <li>因为人读不懂模型的输出</li>
+    <li>因为主观判断不可量化、不可复现，换个人或换一天结论就变</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。ragas 用客观指标 + 固定数据集 + 实验记录，把「感觉还行」升级成可量化、可复现、可迭代的系统化闭环——这正是 vibe check 做不到的。</div></div></div>
+  </details>
+</div>
+<div class="card spark">
+  <div class="tag">💭 发散思考（没有标准答案，动手或动脑想想）</div>
+  <ul>
+    <li>拿你手上的一个 LLM 应用，列出 3 个你现在只靠「感觉」判断好坏的地方；如果要把它们变成可量化指标，你会分别量什么、用 LLM 类还是传统类指标？</li>
+  </ul>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="../index.html"><div class="dir">← 返回</div><div class="ttl">目录</div></a><a class="next" href="02-architecture.html"><div class="dir">下一课 →</div><div class="ttl">项目全景</div></a></div>
 </div>
 

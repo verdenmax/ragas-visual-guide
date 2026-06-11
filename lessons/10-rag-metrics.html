@@ -365,7 +365,41 @@ print(r_faith.value, r_prec.value, r_rec.value, r_rel.value)  <span class="cm">#
     <li>现代用法：<span class="mono">from ragas.metrics.collections import …</span> → 构造注入 <span class="mono">llm</span> / <span class="mono">embeddings</span> → <span class="mono">await ascore(...)</span>；<span class="mono">evaluate()</span> 不传 metrics 时默认就是这四个（legacy 版）。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. 为什么 <code>AnswerRelevancy</code> 构造时除了 <code>llm</code> 还必须传 <code>embeddings</code>，其他三件套却只需 <code>llm</code>？</div>
+  <ol class="opts">
+    <li>因为它要去检索新的上下文</li>
+    <li>因为 embeddings 只是用来让它跑得更快</li>
+    <li>因为它要把「从回答反推出的问题」与原问题算余弦相似度</li>
+    <li>因为它根本不需要 LLM</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：C</strong>。AnswerRelevancy 让 LLM 从回答反推可能的问题，再用 embeddings 计算这些问题与原问题的余弦相似度来衡量「切题」，所以构造时必须注入 embeddings。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. RAG 四件套为什么要分成「两个查检索质量、两个查生成质量」？</div>
+  <ol class="opts">
+    <li>纯粹是为了凑成四个指标</li>
+    <li>因为四个指标的算法其实完全相同</li>
+    <li>因为检索和生成必须用不同的 LLM</li>
+    <li>RAG 同时依赖检索与生成两端，分开各盯一段，才能定位问题出在检索还是生成</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。ContextPrecision / ContextRecall 查检索质量，Faithfulness / AnswerRelevancy 查生成质量；两端分别体检，才能判断 RAG 是「检索没找对」还是「答案跑偏」。</div></div></div>
+  </details>
+</div>
+<div class="card spark">
+  <div class="tag">💭 发散思考（没有标准答案，动手或动脑想想）</div>
+  <ul>
+    <li>给你自己的 RAG 应用挑四件套：如果手头没有标准答案（<code>reference</code>），ContextPrecision / ContextRecall 还能照常用吗？缺了它你会用什么来近似评检索质量？</li>
+  </ul>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="09-metrics-overview.html"><div class="dir">← 上一课</div><div class="ttl">内置指标全景</div></a><a class="next" href="11-custom-metrics.html"><div class="dir">下一课 →</div><div class="ttl">自定义指标（Simple 栈）</div></a></div>
 </div>
 

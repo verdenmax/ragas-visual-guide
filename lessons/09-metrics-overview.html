@@ -369,7 +369,35 @@ ragas 内置了几十个指标，但它们正处在<strong>两代并存</strong>
     <li>接下来三课细讲：RAG 四件套（<a href="10-rag-metrics.html">第 10 课</a>）、自定义 Simple 栈（<a href="11-custom-metrics.html">第 11 课</a>）、传统指标（<a href="12-traditional-metrics.html">第 12 课</a>）。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. 关于两代指标的导入位置，下列哪条说法是对的？</div>
+  <ol class="opts">
+    <li>所有指标都应统一从 <code>ragas.metrics</code> 导入</li>
+    <li>collections 放基类，<code>ragas.metrics</code> 放具名指标</li>
+    <li>具名指标（如 Faithfulness）应从 <code>ragas.metrics.collections</code> 导入；基类与 <code>DiscreteMetric</code> 等原语仍留在 <code>ragas.metrics</code></li>
+    <li><code>DiscreteMetric</code> 已废弃，要改从 collections 导入</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：C</strong>。具名指标的「正门」是 <code>ragas.metrics.collections</code>；从 <code>ragas.metrics</code> 导入它们会发 <code>DeprecationWarning</code> 并在 v1.0 移除。基类与 Simple 栈（<code>DiscreteMetric</code> / <code>NumericMetric</code> / <code>RankingMetric</code>）未废弃，仍在 <code>ragas.metrics</code>。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. 旧代码 <code>from ragas.metrics import Faithfulness</code> 仍能用、但会告警。这种「导入即告警」是为了什么？</div>
+  <ol class="opts">
+    <li>彻底禁止任何人使用 Faithfulness</li>
+    <li>用模块级 <code>__getattr__</code> 做平滑过渡：旧路径暂时可用、同时提示迁移到 collections，到 v1.0 再移除</li>
+    <li>让 Faithfulness 算出的分数变低</li>
+    <li>立刻删除旧路径，逼用户马上重写</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。<code>ragas/metrics/__init__.py</code> 把具名指标放进 <code>_DEPRECATED_METRICS</code>，由模块级 <code>__getattr__</code> 拦截、发告警后仍返回实现；算法与分数口径不变，只是提示改导入路径，实现平滑迁移。</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="08-experiment.html"><div class="dir">← 上一课</div><div class="ttl">现代入口 @experiment</div></a><a class="next" href="10-rag-metrics.html"><div class="dir">下一课 →</div><div class="ttl">RAG 四件套用法</div></a></div>
 </div>
 

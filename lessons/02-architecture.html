@@ -372,7 +372,35 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <li>分清<strong>两条主线</strong>——评测线 vs 测试生成线；后续每一课都按这张图展开。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. 为什么 <code>ragas/__init__.py</code> 的 <code>__all__</code> 刻意不把成百上千个具名指标、各种 LLM / Embedding 包装类塞进顶层？</div>
+  <ol class="opts">
+    <li>因为公开面越小越稳，能降低耦合、减少升级时的破坏性变更</li>
+    <li>因为具名指标在技术上无法被 import</li>
+    <li>因为这些类还没写完</li>
+    <li>因为顶层只能放函数、不能放类</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。顶层只放「人人都要用」的门面（入口 + 数据模型），庞杂实现关进子包，按需从 <code>ragas.metrics</code> / <code>ragas.llms</code> 等子模块导入。公开面越小，升级时越不容易误伤用户代码。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. <code>ragas.experimental</code> 用模块级 <code>__getattr__</code> 惰性加载，主要好处是什么？</div>
+  <ol class="opts">
+    <li>让 experimental 永远不可用</li>
+    <li>强制所有用户都装上实验依赖</li>
+    <li>让导入速度变慢，方便插断点调试</li>
+    <li>没装可选依赖时 import ragas 本身不报错，真用到才触发导入并提示安装</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。只有真的访问 <code>ragas.experimental</code> 时才去 import 背后的 <code>ragas_experimental</code>；缺依赖时抛出带安装指引的 <code>ImportError</code>，而不是在 import 阶段就崩。按需付费、缺啥提示啥。</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="01-what-is-ragas.html"><div class="dir">← 上一课</div><div class="ttl">Ragas 是什么</div></a><a class="next" href="03-evaluation-lifecycle.html"><div class="dir">下一课 →</div><div class="ttl">一次评测的生命周期</div></a></div>
 </div>
 

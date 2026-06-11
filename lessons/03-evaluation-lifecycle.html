@@ -347,7 +347,40 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <li>下一部分深入"<strong>数据与入口</strong>"：样本模型、两个 Dataset 之辨与两个入口的用法。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. 评测中单个任务抛错时，引擎默认把该结果转成 <code>np.nan</code> 而不是直接崩溃。这样设计是为了什么？</div>
+  <ol class="opts">
+    <li>为了节省 token</li>
+    <li>为了让最终分数更高</li>
+    <li>因为 LLM 调用不支持抛异常</li>
+    <li>为了让个别失败行不中断整轮评测，且均值用 <code>safe_nanmean</code> 自动忽略它</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。默认 <code>raise_exceptions=False</code>，单行失败记 <code>np.nan</code>；汇总时 <code>safe_nanmean</code> 会忽略 <code>NaN</code>，所以个别失败行不会拖垮整批，也不会污染均值。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. <code>evaluate()</code> 与 <code>aevaluate()</code> 是什么关系？</div>
+  <ol class="opts">
+    <li><code>aevaluate()</code> 是异步真实现，<code>evaluate()</code> 只是它的同步外壳</li>
+    <li>两者完全独立、算法不同</li>
+    <li><code>evaluate()</code> 因为是同步的所以更快</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。async-first 设计：真正并发干活的是 <code>aevaluate()</code>，<code>evaluate()</code> 只套一层同步外壳（必要时借 <code>nest_asyncio</code> 兼容 Jupyter）。二者都会发 <code>DeprecationWarning</code> 指向 <code>@experiment</code>。</div></div></div>
+  </details>
+</div>
+<div class="card spark">
+  <div class="tag">💭 发散思考（没有标准答案，动手或动脑想想）</div>
+  <ul>
+    <li>若某次评测里有 30% 的行都变成了 <code>np.nan</code>，<code>safe_nanmean</code> 仍会给出一个均值——这个均值还可信吗？你会怎么发现并排查这种「被掩盖的失败」？</li>
+  </ul>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="02-architecture.html"><div class="dir">← 上一课</div><div class="ttl">项目全景</div></a><a class="next" href="04-single-turn-sample.html"><div class="dir">下一课 →</div><div class="ttl">数据模型①：SingleTurnSample</div></a></div>
 </div>
 

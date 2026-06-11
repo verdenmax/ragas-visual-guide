@@ -349,7 +349,34 @@ df = result.to_pandas()  <span class="cm"># 原始数据列 + 每个指标一列
     <li><span class="mono">evaluate</span> / <span class="mono">aevaluate</span> <strong>已废弃</strong>（发 <span class="mono">DeprecationWarning</span>），官方指向 <span class="mono">@experiment</span>（<a href="08-experiment.html">第 8 课</a>）。</li>
   </ul>
 </div>
-
+<div class="selftest">
+<h2>🧪 自测 · 想一想为什么这么设计</h2>
+<div class="quiz">
+  <div class="qn">1. 调用 <code>evaluate()</code> 时，若需要裁判的指标没绑 LLM、你也没传，会发生什么？为什么这样设计？</div>
+  <ol class="opts">
+    <li>自动建一个默认裁判 <code>llm_factory('gpt-4o-mini')</code>，让最小例子开箱即跑</li>
+    <li>随机挑一个本地模型来打分</li>
+    <li>直接报错，要求必须显式传入 LLM</li>
+    <li>跳过该指标、不打分</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。缺裁判时自动兜底建 <code>gpt-4o-mini</code>（embeddings 同理走 <code>embedding_factory</code>），最小例子无需手动配模型即可跑（仍需设 <code>OPENAI_API_KEY</code>），也可在 metric 级覆盖。</div></div></div>
+  </details>
+</div>
+<div class="quiz">
+  <div class="qn">2. 为什么 <code>result.total_cost()</code> / <code>total_tokens()</code> 需要在调用 <code>evaluate</code> 时传 <code>token_usage_parser</code> 才能用？</div>
+  <ol class="opts">
+    <li>因为 <code>total_cost</code> 已被废弃</li>
+    <li>因为不同 LLM 回包里 token 用量的格式不一，需要 parser 告诉 ragas 怎么解析，否则它无从统计</li>
+    <li>因为成本是随机生成的</li>
+  </ol>
+  <details class="accordion">
+    <summary>看答案与解析 <span class="hint">点击展开</span></summary>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。各家模型返回 token 用量的字段格式不同，<code>token_usage_parser</code> 负责抽取；没配它，<code>total_tokens</code> / <code>total_cost</code> 会抛错提示「未配置成本计算」。</div></div></div>
+  </details>
+</div>
+</div>
   <div class="footnav"><a class="prev" href="06-two-datasets.html"><div class="dir">← 上一课</div><div class="ttl">两个 Dataset 之辨</div></a><a class="next" href="08-experiment.html"><div class="dir">下一课 →</div><div class="ttl">现代入口 @experiment</div></a></div>
 </div>
 
