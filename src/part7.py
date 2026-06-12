@@ -25,7 +25,7 @@ LESSON_31 = r"""
 <p><span class="inline">@experiment(...)</span> 返回一个 <span class="inline">ExperimentWrapper</span>：它的 <span class="inline">__call__</span> 只是<strong>跑一行</strong>（自动兼容 async / sync），
 真正的"对整张表批量跑"交给 <span class="inline">arun</span>。把源码压扁，<span class="inline">arun</span> 的骨架就是五步：</p>
 <pre class="code"><span class="kw">async def</span> <span class="fn">arun</span>(self, dataset, name=None, backend=None):
-    <span class="cm"># ① 没给名字就生成一个好记的随机名（有 name_prefix 则拼前缀）</span>
+    <span class="cm"># ① 没给名字就生成一个好记的随机名；name_prefix 会拼在名字前（即使显式传了名也照拼）</span>
     <span class="kw">if</span> name <span class="kw">is</span> None:
         name = memorable_names.generate_unique_name()
 
@@ -216,9 +216,7 @@ LLM 当裁判，难免和人类口味有偏差。ragas 给指标准备了一套<
   一边帮他<strong>把评分标准的措辞改清楚</strong>（优化指令），一边给他<strong>看几份典型范卷</strong>（few-shot 示例）。培训完再拿没见过的卷子考他，看打分和老教师有多<strong>一致</strong>。
 </div>
 
-<h2>为什么要"训练"一个指标</h2>
-<p>自定义指标（<a href="11-custom-metrics.html">第 11 课</a>）能跑，不代表打得<strong>准</strong>。同一句 prompt，换种措辞、补两个例子，LLM 裁判的判断可能就从"和人类对不上"变成"高度一致"。
-训练的目标就是<strong>对齐人类标注</strong>：用一批"输入 + 人给的分"作监督信号，自动搜索更好的<strong>指令</strong>与<strong>示例</strong>，而不是靠人肉反复试 prompt。</p>
+<p>关键点：指标"能跑"不代表"打得准"。训练的目标是<strong>对齐人类标注</strong>——用一批"输入 + 人给的分"作监督信号，自动搜索更好的<strong>指令</strong>与<strong>示例</strong>，省去人肉反复试 prompt。ragas 按指标类型提供<strong>两套</strong>入口：内置 <span class="inline">MetricWithLLM</span> 指标用 <span class="inline">train()</span>，自定义 Simple 指标用 <span class="inline">align_and_validate()</span>。</p>
 
 <h2>MetricWithLLM.train：优化指令 + 挑示例</h2>
 <p>所有 LLM 类内置指标（Faithfulness、AspectCritic、ContextPrecision… 都继承 <span class="inline">MetricWithLLM</span>，<a href="13-metric-base.html">第 13 课</a>）都带一个 <span class="inline">train()</span>。它吃一个 <strong>JSON 标注文件</strong>，按两份配置分别优化：</p>
@@ -267,12 +265,12 @@ metric.train(
 </details>
 
 <h2>Simple 指标的对齐：align_and_validate 与相关性</h2>
-<p>较新的 <span class="inline">SimpleLLMMetric</span> 栈（<span class="inline">DiscreteMetric</span> / <span class="inline">NumericMetric</span> / <span class="inline">RankingMetric</span>）走的是更轻的"对齐 + 验证"一条龙：</p>
+<p>自定义指标（<a href="11-custom-metrics.html">第 11 课</a>）多属较新的 <span class="inline">SimpleLLMMetric</span> 栈（<span class="inline">DiscreteMetric</span> / <span class="inline">NumericMetric</span> / <span class="inline">RankingMetric</span>）——它们不走 <span class="inline">train()</span>，而走更轻的"对齐 + 验证"一条龙：</p>
 <pre class="code"><span class="cm"># dataset 是带人工分数的 Dataset；一步切分 → 对齐 → 验证</span>
 result = metric.align_and_validate(dataset=labeled, embedding_model=embeddings, llm=evaluator_llm)
 print(result[<span class="st">"correlation"</span>], result[<span class="st">"agreement_rate"</span>])</pre>
 <p>它先 <span class="inline">train_test_split</span>（默认 <span class="mono">test_size=0.2</span>），在训练集上 <span class="inline">align</span>——把相似的标注样本作为<strong>动态 few-shot</strong>塞进 prompt（默认 <span class="mono">max_similar_examples=3</span>、<span class="mono">similarity_threshold=0.7</span>，靠 embedding 检索，<a href="22-embedding-abstraction.html">第 22 课</a>）；
-再在测试集上 <span class="inline">validate_alignment</span>：逐行重新打分，算出与人工标注的 <strong>Cohen's Kappa 相关性</strong>与<strong>一致率</strong>。其中 <span class="inline">get_correlation</span> 在基类是占位、由各子类实现（如 <span class="inline">DiscreteMetric</span> 用 <span class="mono">cohen_kappa_score</span>）。</p>
+再在测试集上 <span class="inline">validate_alignment</span>：逐行重新打分，算出与人工标注的<strong>相关性</strong>与<strong>一致率</strong>。<span class="inline">get_correlation</span> 在基类是占位、由各子类实现：<span class="inline">DiscreteMetric</span> / <span class="inline">RankingMetric</span> 用 <span class="mono">cohen_kappa_score</span>（Cohen's Kappa），<span class="inline">NumericMetric</span> 用 <strong>Pearson</strong> 相关系数。</p>
 
 <div class="card detail">
   <div class="tag">🔬 源码对应</div>
@@ -286,7 +284,7 @@ print(result[<span class="st">"correlation"</span>], result[<span class="st">"ag
   <div class="tag">💡 设计亮点</div>
   <ul>
     <li><strong>把 prompt 工程变成可优化问题</strong>：指令搜索交给遗传算法 / DSPy，示例挑选交给 embedding 相似度——从"人肉调 prompt"升级为"用数据自动搜"。</li>
-    <li><strong>用与人类标注的相关性衡量指标好坏</strong>：Cohen's Kappa + 一致率给出客观数字，"裁判准不准"也变得可量化、可对比。</li>
+    <li><strong>用与人类标注的相关性衡量指标好坏</strong>：相关性（离散 / 排序用 Cohen's Kappa、数值用 Pearson）+ 一致率给出客观数字，"裁判准不准"也变得可量化、可对比。</li>
     <li><strong>指令与示例解耦优化</strong>：<span class="inline">InstructionConfig</span> / <span class="inline">DemonstrationConfig</span> 各自可选，按需单独或一起优化，loss 还能按 <span class="mono">output_type</span> 自动选。</li>
   </ul>
 </div>
@@ -422,7 +420,7 @@ LESSON_35 = r"""
     <span class="kw">return</span> evaluate(dataset, metrics)
 
 run_evaluation()
-trace = <span class="kw">await</span> sync_trace()        <span class="cm"># 等 trace 同步到服务器</span>
+trace = <span class="kw">await</span> sync_trace()        <span class="cm"># 等 trace 同步到服务器（await 需在 async 上下文）</span>
 print(trace.get_url())            <span class="cm"># 拿到大盘上的可点链接</span></pre>
 <p><span class="mono">tracing/__init__.py</span> 用 <span class="inline">__getattr__</span> <strong>惰性导出</strong> <span class="inline">observe</span> / <span class="inline">sync_trace</span> / <span class="inline">LangfuseTrace</span> / <span class="inline">MLflowTrace</span>；
 MLflow 侧的 <span class="inline">sync_trace</span> 改走 <span class="mono">get_last_active_trace_id</span> + <span class="mono">get_trace</span>，<span class="inline">MLflowTrace.get_url()</span> 用 <span class="mono">MLFLOW_HOST</span> 拼出 trace 链接。两家长得几乎一样，换平台只换 import。</p>
@@ -498,7 +496,7 @@ LESSON_36 = r"""
 <pre class="code"><span class="cm"># 推荐：快速最小开发环境（约 79 个包，日常开发够用）</span>
 make install-minimal      <span class="cm"># 内部：uv pip install -e ".[dev-minimal]"</span>
 
-<span class="cm"># 或全量（含 ML / 观测栈，约 383 个包）</span>
+<span class="cm"># 或全量（含完整 ML / 观测栈，依赖量大得多）</span>
 make install              <span class="cm"># 内部：uv sync --group dev</span></pre>
 <p><span class="mono">CONTRIBUTING.md</span> 写得很直白：<strong>用 <span class="mono">make</span> 命令而不是直接调工具</strong>；要直接跑 Python 工具时加 <span class="mono">uv run</span> 前缀。
 项目还用 <strong>uv workspace</strong>（<span class="mono">members = [".", "examples"]</span>）同时管主包和 <span class="mono">ragas-examples</span> 两个包，依赖版本统一。</p>

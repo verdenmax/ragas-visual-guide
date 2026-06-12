@@ -301,7 +301,7 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     <span class="kw">return</span> evaluate(dataset, metrics)
 
 run_evaluation()
-trace = <span class="kw">await</span> sync_trace()        <span class="cm"># 等 trace 同步到服务器</span>
+trace = <span class="kw">await</span> sync_trace()        <span class="cm"># 等 trace 同步到服务器（await 需在 async 上下文）</span>
 print(trace.get_url())            <span class="cm"># 拿到大盘上的可点链接</span></pre>
 <p><span class="mono">tracing/__init__.py</span> 用 <span class="inline">__getattr__</span> <strong>惰性导出</strong> <span class="inline">observe</span> / <span class="inline">sync_trace</span> / <span class="inline">LangfuseTrace</span> / <span class="inline">MLflowTrace</span>；
 MLflow 侧的 <span class="inline">sync_trace</span> 改走 <span class="mono">get_last_active_trace_id</span> + <span class="mono">get_trace</span>，<span class="inline">MLflowTrace.get_url()</span> 用 <span class="mono">MLFLOW_HOST</span> 拼出 trace 链接。两家长得几乎一样，换平台只换 import。</p>

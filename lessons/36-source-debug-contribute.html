@@ -284,7 +284,7 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
 <pre class="code"><span class="cm"># 推荐：快速最小开发环境（约 79 个包，日常开发够用）</span>
 make install-minimal      <span class="cm"># 内部：uv pip install -e ".[dev-minimal]"</span>
 
-<span class="cm"># 或全量（含 ML / 观测栈，约 383 个包）</span>
+<span class="cm"># 或全量（含完整 ML / 观测栈，依赖量大得多）</span>
 make install              <span class="cm"># 内部：uv sync --group dev</span></pre>
 <p><span class="mono">CONTRIBUTING.md</span> 写得很直白：<strong>用 <span class="mono">make</span> 命令而不是直接调工具</strong>；要直接跑 Python 工具时加 <span class="mono">uv run</span> 前缀。
 项目还用 <strong>uv workspace</strong>（<span class="mono">members = [".", "examples"]</span>）同时管主包和 <span class="mono">ragas-examples</span> 两个包，依赖版本统一。</p>

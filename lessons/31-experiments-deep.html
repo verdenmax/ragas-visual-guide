@@ -291,7 +291,7 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
 <p><span class="inline">@experiment(...)</span> 返回一个 <span class="inline">ExperimentWrapper</span>：它的 <span class="inline">__call__</span> 只是<strong>跑一行</strong>（自动兼容 async / sync），
 真正的"对整张表批量跑"交给 <span class="inline">arun</span>。把源码压扁，<span class="inline">arun</span> 的骨架就是五步：</p>
 <pre class="code"><span class="kw">async def</span> <span class="fn">arun</span>(self, dataset, name=None, backend=None):
-    <span class="cm"># ① 没给名字就生成一个好记的随机名（有 name_prefix 则拼前缀）</span>
+    <span class="cm"># ① 没给名字就生成一个好记的随机名；name_prefix 会拼在名字前（即使显式传了名也照拼）</span>
     <span class="kw">if</span> name <span class="kw">is</span> None:
         name = memorable_names.generate_unique_name()
 
