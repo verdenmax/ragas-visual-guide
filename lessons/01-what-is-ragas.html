@@ -297,14 +297,17 @@ Ragas 是一个用 Python 写的<strong>开源工具包</strong>，专门帮你<
     <div class="qa">
       <div class="q">🧪 一个最小评测</div>
       <div class="a">用 <span class="inline">DiscreteMetric</span> 自定义一个"准确/不准确"的裁判（取自官方快速上手）：
-<pre class="code"><span class="kw">from</span> ragas.metrics <span class="kw">import</span> DiscreteMetric
+<pre class="code"><span class="kw">from</span> openai <span class="kw">import</span> AsyncOpenAI
+<span class="kw">from</span> ragas.metrics <span class="kw">import</span> DiscreteMetric
 <span class="kw">from</span> ragas.llms <span class="kw">import</span> llm_factory
 
+llm = llm_factory(<span class="st">"gpt-4o-mini"</span>, client=AsyncOpenAI())  <span class="cm"># 选一个评测用 LLM</span>
 metric = DiscreteMetric(
     name=<span class="st">"summary_accuracy"</span>,
     allowed_values=[<span class="st">"accurate"</span>, <span class="st">"inaccurate"</span>],
     prompt=<span class="st">"判断摘要是否准确：\nResponse: {response}"</span>,
 )
+<span class="cm"># 下面这行在 async 上下文里运行（如 asyncio.run(...) 或 notebook）</span>
 score = <span class="kw">await</span> metric.ascore(llm=llm, response=<span class="st">"……"</span>)
 print(score.value, score.reason)  <span class="cm"># 'accurate' + 给分理由</span></pre>
       </div>

@@ -31,14 +31,17 @@ Ragas 是一个用 Python 写的<strong>开源工具包</strong>，专门帮你<
     <div class="qa">
       <div class="q">🧪 一个最小评测</div>
       <div class="a">用 <span class="inline">DiscreteMetric</span> 自定义一个"准确/不准确"的裁判（取自官方快速上手）：
-<pre class="code"><span class="kw">from</span> ragas.metrics <span class="kw">import</span> DiscreteMetric
+<pre class="code"><span class="kw">from</span> openai <span class="kw">import</span> AsyncOpenAI
+<span class="kw">from</span> ragas.metrics <span class="kw">import</span> DiscreteMetric
 <span class="kw">from</span> ragas.llms <span class="kw">import</span> llm_factory
 
+llm = llm_factory(<span class="st">"gpt-4o-mini"</span>, client=AsyncOpenAI())  <span class="cm"># 选一个评测用 LLM</span>
 metric = DiscreteMetric(
     name=<span class="st">"summary_accuracy"</span>,
     allowed_values=[<span class="st">"accurate"</span>, <span class="st">"inaccurate"</span>],
     prompt=<span class="st">"判断摘要是否准确：\nResponse: {response}"</span>,
 )
+<span class="cm"># 下面这行在 async 上下文里运行（如 asyncio.run(...) 或 notebook）</span>
 score = <span class="kw">await</span> metric.ascore(llm=llm, response=<span class="st">"……"</span>)
 print(score.value, score.reason)  <span class="cm"># 'accurate' + 给分理由</span></pre>
       </div>
@@ -106,7 +109,7 @@ LESSON_02 = r"""
 
 <p>那指标和模型从哪来？答案是<strong>按需从子模块导入</strong>，例如：</p>
 <pre class="code"><span class="kw">from</span> ragas <span class="kw">import</span> evaluate, EvaluationDataset   <span class="cm"># 顶层：入口 + 数据</span>
-<span class="kw">from</span> ragas.metrics <span class="kw">import</span> Faithfulness        <span class="cm"># 子模块：指标</span>
+<span class="kw">from</span> ragas.metrics.collections <span class="kw">import</span> Faithfulness  <span class="cm"># 子模块：具名指标（规范位置）</span>
 <span class="kw">from</span> ragas.llms <span class="kw">import</span> llm_factory           <span class="cm"># 子模块：LLM 抽象</span></pre>
 <p>顶层只放"人人都要用"的东西，把庞杂的实现关进子包，<strong>公开面越小越稳</strong>，升级时也更不容易误伤用户代码。</p>
 
@@ -162,9 +165,7 @@ LESSON_02 = r"""
 
 <div class="card detail">
   <div class="tag">🔬 源码对应</div>
-  顶层门面定义在 <span class="mono">src/ragas/__init__.py</span>：<span class="mono">__all__</span> 列出对外导出的名字，模块级 <span class="mono">__getattr__</span> 负责惰性加载 <span class="mono">experimental</span>（实际导入 <span class="mono">ragas_experimental</span>）。
-  各子包分别在 <span class="mono">metrics/</span>、<span class="mono">testset/</span>、<span class="mono">llms/</span>、<span class="mono">embeddings/</span>、<span class="mono">prompt/</span>、<span class="mono">backends/</span>、<span class="mono">integrations/</span>、<span class="mono">optimizers/</span> 目录下；
-  核心模块为 <span class="mono">evaluation.py</span>、<span class="mono">experiment.py</span>、<span class="mono">executor.py</span>、<span class="mono">dataset.py</span>、<span class="mono">dataset_schema.py</span>、<span class="mono">callbacks.py</span>、<span class="mono">cost.py</span>、<span class="mono">cache.py</span>。
+  顶层门面定义在 <span class="mono">src/ragas/__init__.py</span>：<span class="mono">__all__</span> 列出对外导出的名字，模块级 <span class="mono">__getattr__</span> 负责惰性加载 <span class="mono">experimental</span>（实际导入 <span class="mono">ragas_experimental</span>，缺依赖时抛带安装指引的 <span class="mono">ImportError</span>）。各子包与核心模块见上方「子包地图」，此处不再赘列。
 </div>
 
 <div class="card spark">
@@ -180,7 +181,7 @@ LESSON_02 = r"""
   <div class="tag">✅ 本课要点</div>
   <ul>
     <li>顶层 <span class="mono">__init__.py</span> 只暴露<strong>核心门面</strong>；指标与模型从 <span class="mono">ragas.metrics</span>、<span class="mono">ragas.llms</span> 等<strong>子模块</strong>导入。</li>
-    <li>记住<strong>子包地图</strong>：metrics / testset / llms / embeddings / prompt / backends / integrations / optimizers + 一组核心模块。</li>
+    <li>记住<strong>子包地图</strong>（见上表）：数据 / 指标 / 出题 / 模型 / Prompt / 基建，各管一摊。</li>
     <li>分清<strong>两条主线</strong>——评测线 vs 测试生成线；后续每一课都按这张图展开。</li>
   </ul>
 </div>
