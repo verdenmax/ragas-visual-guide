@@ -314,7 +314,7 @@ print(sample.pretty_repr())   <span class="cm"># 打印成可读的多轮对话<
       <div class="a"><span class="inline">MultiTurnSample</span> 在 <span class="inline">user_input</span> 上挂了一个 <span class="inline">field_validator</span>，逐条检查：
         ① 每个元素必须是 <span class="inline">HumanMessage</span> / <span class="inline">AIMessage</span> / <span class="inline">ToolMessage</span> 之一；
         ② <span class="inline">ToolMessage</span> 之前必须出现过 <span class="inline">AIMessage</span>；
-        ③ <span class="inline">ToolMessage</span> 必须紧跟在"带 <span class="inline">tool_calls</span> 的 <span class="inline">AIMessage</span>"或"另一个 <span class="inline">ToolMessage</span>"之后。任一条不满足就抛 <span class="inline">ValueError</span>。</div>
+        ③ <span class="inline">ToolMessage</span> 必须紧跟在"带 <span class="inline">tool_calls</span> 的 <span class="inline">AIMessage</span>"或"另一个 <span class="inline">ToolMessage</span>"之后。任一条不满足就抛 <span class="inline">ValueError</span>——比如把一条 <span class="inline">ToolMessage</span> 放在对话开头（前面没有 <span class="inline">AIMessage</span>），构造样本时就会立刻报错。</div>
     </div>
     <div class="qa">
       <div class="q">✅ 为什么把校验放在数据层</div>
@@ -333,7 +333,7 @@ print(sample.pretty_repr())   <span class="cm"># 打印成可读的多轮对话<
   <div class="tag">💡 设计亮点</div>
   <ul>
     <li><strong>结构化消息</strong>：把"对话 + 工具调用"拆成 Human / AI / Tool 三类消息 + <span class="inline">ToolCall</span>，让 Agent 行为可被程序读取与打分，而不是一坨纯文本。</li>
-    <li><strong>调用与结果配对</strong>：<span class="inline">AIMessage.tool_calls</span> 描述"模型想调哪个工具"，随后的 <span class="inline">ToolMessage</span> 承接其结果，二者靠出现顺序配对，由 <span class="inline">field_validator</span> 保证合法。</li>
+    <li><strong>调用与结果配对</strong>：<span class="inline">AIMessage.tool_calls</span> 描述"模型想调哪个工具"，随后的 <span class="inline">ToolMessage</span> 承接其结果。注意 ragas 的消息<strong>没有 OpenAI / LangChain 那种 <span class="inline">tool_call_id</span></strong>——纯靠<strong>出现顺序</strong>配对，由 <span class="inline">field_validator</span> 保证合法。</li>
     <li><strong>构造即校验</strong>：合法性检查放在数据层，把错误前移到"造样本"阶段，避免评测半途因脏数据中断。</li>
   </ul>
 </div>

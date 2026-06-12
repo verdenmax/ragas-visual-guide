@@ -348,9 +348,8 @@ sample.get_features()  <span class="cm"># ['user_input', 'response', 'reference'
 <div class="card spark">
   <div class="tag">💡 设计亮点</div>
   <ul>
-    <li><strong>to_dict 丢弃 None</strong>：样本"按需带字段"，同一个模型既能装齐全的 RAG 样本，也能只装"问题 + 回答"，喂给不同指标都不浪费列。</li>
+    <li><strong>一个模型适配多指标</strong>：字段全 Optional + <span class="inline">to_dict</span> 丢弃 None，让同一个 <span class="inline">SingleTurnSample</span> 既能装齐全 RAG 样本、也能只装"问题 + 回答"，喂给不同指标都不浪费列。</li>
     <li><strong>统一转换层</strong>：pandas / HuggingFace / CSV / JSONL 的互转都收敛到 <span class="inline">RagasDataset</span> 一处实现，子类无需各写一套（DRY）。</li>
-    <li><strong>字段全 Optional</strong>：用一个数据模型覆盖多种评测场景，缺列在校验阶段才报错，定义阶段不强制。</li>
   </ul>
 </div>
 

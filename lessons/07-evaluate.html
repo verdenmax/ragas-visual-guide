@@ -278,6 +278,11 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
   它自动安排"阅卷老师"并发批改，最后汇成一张成绩单（<span class="inline">EvaluationResult</span>）。
 </div>
 
+<div class="card warn">
+  <div class="tag">⚠️ 先把状态摆在前面：evaluate() 已废弃</div>
+  本课讲的 <span class="inline">evaluate()</span> / <span class="inline">aevaluate()</span> <strong>都会发 <span class="mono">DeprecationWarning</span></strong>、官方指向 <span class="mono">@experiment</span>（<a href="08-experiment.html">第 8 课</a>）。它仍可用、也值得理解其机制，但<strong>新项目请优先用实验装饰器</strong>——所以先点明状态，再来跑它。
+</div>
+
 <h2>最小可跑示例</h2>
 <pre class="code"><span class="kw">from</span> ragas <span class="kw">import</span> evaluate, EvaluationDataset, SingleTurnSample
 <span class="kw">from</span> ragas.metrics <span class="kw">import</span> Faithfulness
@@ -316,14 +321,10 @@ df = result.to_pandas()  <span class="cm"># 原始数据列 + 每个指标一列
   </div>
 </details>
 
-<h2>列名对不齐怎么办</h2>
-<p>若数据来自 <strong>HuggingFace Dataset</strong> 且列名和 ragas 默认不一致（如 <span class="mono">contexts_v1</span>），可传 <span class="mono">column_map={"contexts": "contexts_v1"}</span>；内部 <span class="inline">remap_column_names</span> 会先反向重命名再校验。注意：<strong>只有</strong>传入的是 HF <span class="inline">Dataset</span> 时才走这步，直接用 <span class="inline">EvaluationDataset</span> 则按字段名匹配。</p>
-
-<div class="card warn">
-  <div class="tag">⚠️ 已废弃，请转向 @experiment</div>
-  从源码看，<span class="inline">evaluate()</span> 与 <span class="inline">aevaluate()</span> <strong>都会发出 <span class="mono">DeprecationWarning</span></strong>，提示改用 <span class="mono">@experiment</span> 装饰器。
-  评测只是"打一次分"，而实验把"改动 → 跑分 → 留痕对比"固化成闭环。用法见 <a href="08-experiment.html">第 8 课</a>。
-</div>
+<details class="accordion">
+  <summary><span class="badge-num">2</span> 列名对不齐怎么办（仅 HF Dataset）<span class="hint">点击展开详解</span></summary>
+  <div class="acc-body"><div class="qa"><div class="a">若数据来自 <strong>HuggingFace Dataset</strong> 且列名和 ragas 默认不一致（如 <span class="mono">contexts_v1</span>），可传 <span class="mono">column_map={"contexts": "contexts_v1"}</span>，内部 <span class="inline">remap_column_names</span> 先反向重命名再校验；直接用 <span class="inline">EvaluationDataset</span> 则按字段名匹配、无需此参。</div></div></div>
+</details>
 
 <div class="card detail">
   <div class="tag">🔬 源码对应</div>
