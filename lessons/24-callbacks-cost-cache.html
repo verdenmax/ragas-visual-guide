@@ -280,10 +280,10 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
 <p><span class="inline">new_group(name, inputs, callbacks, ...)</span> 开一个分组，返回 <span class="mono">(run_manager, group_manager)</span>，让子调用挂到父节点下。<span class="inline">RagasTracer</span> 是个回调处理器，把整轮运行记成一棵 <strong>trace 树</strong>：</p>
 <pre class="code"><span class="cm"># ChainType：运行树的层级</span>
 <span class="kw">class</span> <span class="fn">ChainType</span>(Enum):
-    EVALUATION    <span class="cm"># 整轮评测（根）</span>
-    METRIC        <span class="cm"># 某个指标</span>
-    ROW           <span class="cm"># 某一行样本</span>
-    RAGAS_PROMPT  <span class="cm"># 一次 prompt 调用（叶）</span>
+    EVALUATION    <span class="cm"># 整轮评测（树根·第1层）</span>
+    METRIC        <span class="cm"># 某个指标（第3层·嵌在 ROW 之下）</span>
+    ROW           <span class="cm"># 某一行样本（第2层）</span>
+    RAGAS_PROMPT  <span class="cm"># 一次 prompt 调用（叶·第4层）</span>
 
 <span class="cm"># RagasTracer：on_chain_start 建节点并链到父节点 children，</span>
 <span class="cm"># on_chain_end 记录 outputs；traces: Dict[str, ChainRun]</span>

@@ -284,7 +284,7 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
   <tr><td><strong>例题库</strong></td><td class="mono">InMemoryExampleStore</td><td class="mono">SimpleInMemoryExampleStore</td></tr>
   <tr><td><strong>选择依据</strong></td><td>embed_query + 余弦相似度</td><td>同左</td></tr>
   <tr><td><strong>默认 top-k</strong></td><td class="mono">top_k_for_examples=5</td><td class="mono">max_similar_examples=3</td></tr>
-  <tr><td><strong>阈值</strong></td><td class="mono">threshold=0.7</td><td class="mono">similarity_threshold=0.7</td></tr>
+  <tr><td><strong>阈值</strong></td><td class="mono">threshold_for_examples=0.7</td><td class="mono">similarity_threshold=0.7</td></tr>
   <tr><td><strong>没 embedding 时</strong></td><td>—</td><td>退回最近 N 条</td></tr>
 </table>
 <pre class="code"><span class="cm"># 经典侧：从一个普通 PydanticPrompt 升级成动态 few-shot</span>

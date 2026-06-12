@@ -83,8 +83,7 @@ LESSON_19 = r"""
   <ul>
     <li>经典指标站 <span class="inline">PydanticPrompt</span>：<span class="mono">to_string</span> 拼"指令 + JSON schema 输出签名 + few-shot + 输入"，<span class="mono">generate</span> 自带 <span class="mono">RagasOutputParser</span> 解析与 <span class="mono">FixOutputFormat</span> 自修复。</li>
     <li><span class="inline">PromptMixin</span> 让经典 prompt 可发现 / 可替换 / 可翻译 / 可存盘。</li>
-    <li>现代 collections 指标站更薄的 <span class="mono">prompt/metrics/base_prompt.py:BasePrompt</span>（只有 <span class="mono">to_string</span>），解析与修复交给 instructor（<a href="21-llm-abstraction.html">第 21 课</a>）。</li>
-    <li>别把两个同名 <span class="mono">BasePrompt</span> 搞混：一个在 <span class="mono">prompt/base.py</span>（带 generate），一个在 <span class="mono">prompt/metrics/base_prompt.py</span>（只 to_string）。</li>
+    <li>两个同名 <span class="mono">BasePrompt</span> 别搞混：<span class="mono">prompt/base.py</span> 的带 <span class="mono">generate</span>（经典 <span class="inline">PydanticPrompt</span> 的父类，自己调 LLM + 解析）；<span class="mono">prompt/metrics/base_prompt.py</span> 的只有 <span class="mono">to_string</span>（现代 collections 指标用，解析与修复交给 instructor，<a href="21-llm-abstraction.html">第 21 课</a>）。</li>
   </ul>
 </div>
 """
@@ -107,7 +106,7 @@ LESSON_20 = r"""
   <tr><td><strong>例题库</strong></td><td class="mono">InMemoryExampleStore</td><td class="mono">SimpleInMemoryExampleStore</td></tr>
   <tr><td><strong>选择依据</strong></td><td>embed_query + 余弦相似度</td><td>同左</td></tr>
   <tr><td><strong>默认 top-k</strong></td><td class="mono">top_k_for_examples=5</td><td class="mono">max_similar_examples=3</td></tr>
-  <tr><td><strong>阈值</strong></td><td class="mono">threshold=0.7</td><td class="mono">similarity_threshold=0.7</td></tr>
+  <tr><td><strong>阈值</strong></td><td class="mono">threshold_for_examples=0.7</td><td class="mono">similarity_threshold=0.7</td></tr>
   <tr><td><strong>没 embedding 时</strong></td><td>—</td><td>退回最近 N 条</td></tr>
 </table>
 <pre class="code"><span class="cm"># 经典侧：从一个普通 PydanticPrompt 升级成动态 few-shot</span>
@@ -395,7 +394,7 @@ LESSON_23 = r"""
 
 <div class="card detail">
   <div class="tag">🔬 源码对应</div>
-  调度核心在 <span class="mono">src/ragas/executor.py</span>：dataclass <span class="mono">Executor</span>（<span class="mono">desc</span> / <span class="mono">show_progress</span> / <span class="mono">raise_exceptions=False</span> / <span class="mono">batch_size</span> / <span class="mono">run_config</span> / <span class="mono">_cancel_event</span>），方法 <span class="mono">submit</span>、<span class="mono">wrap_callable_with_index</span>、<span class="mono">_process_jobs</span>、<span class="mono">results</span> / <span class="mono">aresults</span>（<span class="mono">sorted(..., key=lambda x: x[0])</span> 保序）、<span class="mono">cancel</span> / <span class="mono">is_cancelled</span>，以及便捷函数 <span class="mono">run_async_batch</span>。配置在 <span class="mono">src/ragas/run_config.py</span>：<span class="mono">RunConfig</span>（默认 <span class="mono">timeout=180</span> / <span class="mono">max_retries=10</span> / <span class="mono">max_wait=60</span> / <span class="mono">max_workers=16</span> / <span class="mono">seed=42</span>）与 <span class="mono">add_retry</span> / <span class="mono">add_async_retry</span>（tenacity 退避重试）。失败填 <span class="mono">np.nan</span> 的逻辑在 <span class="mono">wrap_callable_with_index</span>。
+  调度核心在 <span class="mono">src/ragas/executor.py</span>：dataclass <span class="mono">Executor</span>（<span class="mono">desc</span> / <span class="mono">show_progress</span> / <span class="mono">raise_exceptions=False</span> / <span class="mono">batch_size</span> / <span class="mono">run_config</span> / <span class="mono">_cancel_event</span>），方法 <span class="mono">submit</span>、<span class="mono">wrap_callable_with_index</span>、<span class="mono">_process_jobs</span>、<span class="mono">results</span> / <span class="mono">aresults</span>（<span class="mono">sorted(..., key=lambda x: x[0])</span> 保序）、<span class="mono">cancel</span> / <span class="mono">is_cancelled</span>，以及便捷函数 <span class="mono">run_async_batch</span>。配置在 <span class="mono">src/ragas/run_config.py</span>：<span class="mono">RunConfig</span>（默认 <span class="mono">timeout=180</span> / <span class="mono">max_retries=10</span> / <span class="mono">max_wait=60</span> / <span class="mono">max_workers=16</span> / <span class="mono">seed=42</span>）与 <span class="mono">add_retry</span> / <span class="mono">add_async_retry</span>（tenacity 退避重试）。失败填 <span class="mono">np.nan</span> 的逻辑在 <span class="mono">wrap_callable_with_index</span>。补充一点：单任务<strong>超时</strong>其实由 metric 侧的 <span class="mono">asyncio.wait_for</span> 在 <span class="mono">single_turn_ascore</span>（<span class="mono">metrics/base.py</span>）里强制，超时与异常一样落到 <span class="mono">np.nan</span>——并非 Executor 自己计时。
 </div>
 
 <div class="card spark">
@@ -432,10 +431,10 @@ LESSON_24 = r"""
 <p><span class="inline">new_group(name, inputs, callbacks, ...)</span> 开一个分组，返回 <span class="mono">(run_manager, group_manager)</span>，让子调用挂到父节点下。<span class="inline">RagasTracer</span> 是个回调处理器，把整轮运行记成一棵 <strong>trace 树</strong>：</p>
 <pre class="code"><span class="cm"># ChainType：运行树的层级</span>
 <span class="kw">class</span> <span class="fn">ChainType</span>(Enum):
-    EVALUATION    <span class="cm"># 整轮评测（根）</span>
-    METRIC        <span class="cm"># 某个指标</span>
-    ROW           <span class="cm"># 某一行样本</span>
-    RAGAS_PROMPT  <span class="cm"># 一次 prompt 调用（叶）</span>
+    EVALUATION    <span class="cm"># 整轮评测（树根·第1层）</span>
+    METRIC        <span class="cm"># 某个指标（第3层·嵌在 ROW 之下）</span>
+    ROW           <span class="cm"># 某一行样本（第2层）</span>
+    RAGAS_PROMPT  <span class="cm"># 一次 prompt 调用（叶·第4层）</span>
 
 <span class="cm"># RagasTracer：on_chain_start 建节点并链到父节点 children，</span>
 <span class="cm"># on_chain_end 记录 outputs；traces: Dict[str, ChainRun]</span>

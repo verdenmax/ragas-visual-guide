@@ -349,8 +349,7 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
   <ul>
     <li>经典指标站 <span class="inline">PydanticPrompt</span>：<span class="mono">to_string</span> 拼"指令 + JSON schema 输出签名 + few-shot + 输入"，<span class="mono">generate</span> 自带 <span class="mono">RagasOutputParser</span> 解析与 <span class="mono">FixOutputFormat</span> 自修复。</li>
     <li><span class="inline">PromptMixin</span> 让经典 prompt 可发现 / 可替换 / 可翻译 / 可存盘。</li>
-    <li>现代 collections 指标站更薄的 <span class="mono">prompt/metrics/base_prompt.py:BasePrompt</span>（只有 <span class="mono">to_string</span>），解析与修复交给 instructor（<a href="21-llm-abstraction.html">第 21 课</a>）。</li>
-    <li>别把两个同名 <span class="mono">BasePrompt</span> 搞混：一个在 <span class="mono">prompt/base.py</span>（带 generate），一个在 <span class="mono">prompt/metrics/base_prompt.py</span>（只 to_string）。</li>
+    <li>两个同名 <span class="mono">BasePrompt</span> 别搞混：<span class="mono">prompt/base.py</span> 的带 <span class="mono">generate</span>（经典 <span class="inline">PydanticPrompt</span> 的父类，自己调 LLM + 解析）；<span class="mono">prompt/metrics/base_prompt.py</span> 的只有 <span class="mono">to_string</span>（现代 collections 指标用，解析与修复交给 instructor，<a href="21-llm-abstraction.html">第 21 课</a>）。</li>
   </ul>
 </div>
 <div class="selftest">
