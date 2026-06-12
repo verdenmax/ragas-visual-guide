@@ -700,7 +700,7 @@ QUIZZES = {
                     "因为手写测试集的格式无法被 <code>EvaluationDataset</code> 接收",
                 ],
                 "answer": 1,
-                "why": "手写测试集的三宗罪是少 / 偏 / 慢；测试生成线用文档自动造数据，量能上去、覆盖更全，且可复现——这正是它存在的理由。",
+                "why": "手写测试集的四宗罪是量少 / 有偏 / 覆盖窄 / 难复现；测试生成线用文档自动造数据，量能上去、覆盖更全，且可复现——这正是它存在的理由。",
             },
             {
                 "q": "测试生成被拆成 docs → KnowledgeGraph → personas → scenarios → samples → Testset 这样的分阶段管道，好在哪？",
