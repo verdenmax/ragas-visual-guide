@@ -13,6 +13,22 @@ LESSON_38 = r"""
   <strong>实验台</strong>（<span class="inline">@experiment</span>）记录每次改动前后的成绩。答辩要点只有一句：评测不是一次性打分，而是<strong>改 → 跑 → 比</strong>的闭环。
 </div>
 
+<p><strong>本课流程一眼看</strong>：一条 RAG 评测流水线的全貌——注意 ② 造题与 ④ 现跑你的 RAG 是<strong>两次不同的生成</strong> 👇</p>
+<div class="vflow">
+  <div class="step"><div class="num">1</div><div class="sc"><h4>选定要评的 RAG</h4>
+    <p>用户问题 → 检索 → 生成，明确评测对象</p></div></div>
+  <div class="step"><div class="num">2</div><div class="sc"><h4>造黄金题</h4>
+    <p>喂文档自动出题 → <span class="mono">Testset</span>（只有 <span class="mono">user_input</span> + <span class="mono">reference</span>）</p></div></div>
+  <div class="step"><div class="num">3</div><div class="sc"><h4>转评测集</h4>
+    <p><span class="mono">to_evaluation_dataset()</span> 汇入评测线</p></div></div>
+  <div class="step"><div class="num">4</div><div class="sc"><h4>现跑你的 RAG</h4>
+    <p>对每个问题跑你的系统，补上 <span class="mono">response</span> / <span class="mono">retrieved_contexts</span>——这是第二次「生成」，别漏</p></div></div>
+  <div class="step"><div class="num">5</div><div class="sc"><h4>选指标 + @experiment 跑分</h4>
+    <p>RAG 四件套，逐行打分、落盘留痕</p></div></div>
+  <div class="step"><div class="num">6</div><div class="sc"><h4>读结果迭代</h4>
+    <p>看 <span class="mono">.value</span> / <span class="mono">.reason</span> 定位薄弱，改 prompt / 检索，再跑对比</p></div></div>
+</div>
+
 <h2>六步走完一条评测流水线</h2>
 <p>一个 RAG 问答应用要管好<strong>检索 + 生成</strong>两端。下面六步把全书能力串起来，每一步都能回看对应章节：</p>
 

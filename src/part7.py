@@ -216,6 +216,17 @@ LLM 当裁判，难免和人类口味有偏差。ragas 给指标准备了一套<
   一边帮他<strong>把评分标准的措辞改清楚</strong>（优化指令），一边给他<strong>看几份典型范卷</strong>（few-shot 示例）。培训完再拿没见过的卷子考他，看打分和老教师有多<strong>一致</strong>。
 </div>
 
+<p><strong>本课流程一眼看</strong>：给 LLM 指标做一次「培训」、对齐人类口味 👇</p>
+<div class="flow">
+  <div class="node"><div class="nt">人工标注</div><div class="nd">输入 + 人给的分（.json）</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">喂给 train()</div><div class="nd">内置 / Simple 各有入口</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">优化</div><div class="nd">改写指令 + 挑 few-shot 示例</div></div>
+  <div class="arrow">→</div>
+  <div class="node hl"><div class="nt">更准的指标</div><div class="nd">再用与标注的相关性验证</div></div>
+</div>
+
 <p>关键点：指标"能跑"不代表"打得准"。训练的目标是<strong>对齐人类标注</strong>——用一批"输入 + 人给的分"作监督信号，自动搜索更好的<strong>指令</strong>与<strong>示例</strong>，省去人肉反复试 prompt。ragas 按指标类型提供<strong>两套</strong>入口：内置 <span class="inline">MetricWithLLM</span> 指标用 <span class="inline">train()</span>，自定义 Simple 指标用 <span class="inline">align_and_validate()</span>。</p>
 
 <h2>MetricWithLLM.train：优化指令 + 挑示例</h2>

@@ -278,6 +278,19 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
   把建图想成一条<strong>食材加工流水线</strong>：先把大块食材<strong>切小</strong>（splitter），再给每块<strong>贴标签</strong>——摘要、关键词、实体（extractor），其间<strong>挑掉不合格的块</strong>（filter），最后把<strong>味道相近的摆到一起</strong>（relationship builder 连边）。一道道工序下来，原料才变成能直接用的"半成品"。
 </div>
 
+<p><strong>本课流程一眼看</strong>：四类 transform 把光秃秃的文档加工成富知识图谱 👇</p>
+<div class="flow">
+  <div class="node"><div class="nt">文档大节点</div><div class="nd">DOCUMENT</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">Splitter</div><div class="nd">切成小块</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">Extractor</div><div class="nd">抽摘要/关键词/实体</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">NodeFilter</div><div class="nd">剔除不合格</div></div>
+  <div class="arrow">→</div>
+  <div class="node hl"><div class="nt">RelationshipBuilder</div><div class="nd">连边 → 富知识图谱</div></div>
+</div>
+
 <h2>四类加工动作</h2>
 <p>所有变换都继承自 <span class="mono">BaseGraphTransformation</span>，按职责分成四类：</p>
 

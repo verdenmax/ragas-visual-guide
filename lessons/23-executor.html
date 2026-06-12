@@ -276,6 +276,19 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
   想象一个<strong>阅卷调度中心</strong>：多位老师<strong>并发</strong>改卷；某份卷子改太久就<strong>超时跳过</strong>；某份算错了不至于让整轮作废，而是<strong>记零分</strong>继续；中途还能<strong>喊停</strong>全场。最关键的是——不管谁先改完，<strong>最后成绩单要按学号原序排列</strong>，不能乱。
 </div>
 
+<p><strong>本课流程一眼看</strong>：Executor 怎么把上千次调用并发跑完、又保持原序 👇</p>
+<div class="flow">
+  <div class="node"><div class="nt">submit 任务</div><div class="nd">wrap_callable 带索引</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">并发跑</div><div class="nd">as_completed · 超时跳过</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">容错</div><div class="nd">出错记 np.nan（可重试）</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">按索引排序</div><div class="nd">还原提交顺序</div></div>
+  <div class="arrow">→</div>
+  <div class="node hl"><div class="nt">结果列表</div><div class="nd">顺序 == 提交顺序</div></div>
+</div>
+
 <h2>保序并发：包装时记下索引</h2>
 <p>并发执行后结果是乱序到达的。Executor 在 <span class="inline">submit</span> 时给每个任务编号，用 <span class="inline">wrap_callable_with_index(callable, counter)</span> 把返回值包成 <span class="mono">(counter, result)</span>；收齐后按索引排序再剥掉编号，于是<strong>输出顺序 == 提交顺序</strong>：</p>
 <pre class="code"><span class="kw">def</span> <span class="fn">wrap_callable_with_index</span>(callable, counter):

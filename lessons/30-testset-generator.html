@@ -278,6 +278,22 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
   它内部依次完成<strong>建图 → 设定考生 → 排题 → 写题</strong>，最后吐出一份装订好的卷子——还能<strong>一键转成</strong>评测线认得的格式。
 </div>
 
+<p><strong>本课流程一眼看</strong>：TestsetGenerator 把一堆文档一路串成可评测的测试集 👇</p>
+<div class="vflow">
+  <div class="step"><div class="num">1</div><div class="sc"><h4>投入文档</h4>
+    <p>docs 进场（也可走 <span class="mono">from_langchain</span> / <span class="mono">from_llama_index</span>）</p></div></div>
+  <div class="step"><div class="num">2</div><div class="sc"><h4>建知识图谱</h4>
+    <p>transforms 切块 / 抽属性 / 连边（<a href="26-knowledge-graph.html">第 26 课</a>、<a href="27-transforms.html">第 27 课</a>）</p></div></div>
+  <div class="step"><div class="num">3</div><div class="sc"><h4>生成 personas</h4>
+    <p>从 KG 自动产出虚拟提问者（<a href="28-persona-scenario.html">第 28 课</a>）</p></div></div>
+  <div class="step"><div class="num">4</div><div class="sc"><h4>定题型配比</h4>
+    <p><span class="mono">default_query_distribution</span> 分配单跳 / 多跳（<a href="29-synthesizers.html">第 29 课</a>）</p></div></div>
+  <div class="step"><div class="num">5</div><div class="sc"><h4>并发出题</h4>
+    <p>复用 <span class="mono">Executor</span> 跑 scenarios → samples</p></div></div>
+  <div class="step"><div class="num">6</div><div class="sc"><h4>Testset → to_evaluation_dataset</h4>
+    <p>打包成 <span class="mono">Testset</span>，再一键回到评测线</p></div></div>
+</div>
+
 <h2>一行调用的背后</h2>
 <p>最常见的用法只有三行——构造生成器、喂文档出题、转成评测数据集：</p>
 <pre class="code"><span class="kw">from</span> ragas.testset <span class="kw">import</span> TestsetGenerator

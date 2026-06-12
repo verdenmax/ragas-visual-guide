@@ -10,6 +10,17 @@ LESSON_19 = r"""
   <span class="inline">PydanticPrompt</span> 像一张<strong>带标准答题格式的考卷</strong>：印着题面（instruction）、必须遵守的答题格式（输出的 JSON schema）、几道例题（few-shot），最后才是这次的题目（输入）。考生（LLM）答完，<strong>阅卷机先按格式核对</strong>——格式不对就把卷子<strong>退回去让它照格式重填</strong>，直到合格或用完重试次数。
 </div>
 
+<p><strong>本课流程一眼看</strong>：PydanticPrompt 把一次「问 LLM」变成结构化、可自我纠错的流程 👇</p>
+<div class="flow">
+  <div class="node"><div class="nt">拼考卷</div><div class="nd">指令 + schema + 例题 + 输入</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">LLM 作答</div><div class="nd">按 schema 输出</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">解析校验</div><div class="nd">格式不对 → 带错重试</div></div>
+  <div class="arrow">→</div>
+  <div class="node hl"><div class="nt">结构化对象</div><div class="nd">pydantic OutputModel</div></div>
+</div>
+
 <h2>经典栈：PydanticPrompt 怎么拼出一张考卷</h2>
 <p><span class="inline">PydanticPrompt[InputModel, OutputModel]</span> 用四个类属性定义一张考卷——输入模型、输出模型、指令、例题：</p>
 <pre class="code"><span class="kw">class</span> <span class="fn">StatementGeneratorPrompt</span>(
@@ -345,6 +356,19 @@ LESSON_23 = r"""
 <div class="card analogy">
   <div class="tag">🧩 生活类比</div>
   想象一个<strong>阅卷调度中心</strong>：多位老师<strong>并发</strong>改卷；某份卷子改太久就<strong>超时跳过</strong>；某份算错了不至于让整轮作废，而是<strong>记零分</strong>继续；中途还能<strong>喊停</strong>全场。最关键的是——不管谁先改完，<strong>最后成绩单要按学号原序排列</strong>，不能乱。
+</div>
+
+<p><strong>本课流程一眼看</strong>：Executor 怎么把上千次调用并发跑完、又保持原序 👇</p>
+<div class="flow">
+  <div class="node"><div class="nt">submit 任务</div><div class="nd">wrap_callable 带索引</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">并发跑</div><div class="nd">as_completed · 超时跳过</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">容错</div><div class="nd">出错记 np.nan（可重试）</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">按索引排序</div><div class="nd">还原提交顺序</div></div>
+  <div class="arrow">→</div>
+  <div class="node hl"><div class="nt">结果列表</div><div class="nd">顺序 == 提交顺序</div></div>
 </div>
 
 <h2>保序并发：包装时记下索引</h2>
