@@ -377,16 +377,16 @@ sample.get_features()  <span class="cm"># ['user_input', 'response', 'reference'
   </details>
 </div>
 <div class="quiz">
-  <div class="qn">2. <code>retrieved_contexts</code> 和 <code>reference_contexts</code> 有什么区别？</div>
+  <div class="qn">2. 你建了个 <code>SingleTurnSample</code>，<code>reference</code> 忘了填（保持默认 <code>None</code>）。之后某指标按 <code>get_features()</code> 检查它要的列在不在——会怎样？</div>
   <ol class="opts">
-    <li>两者完全一样，只是别名</li>
-    <li><code>retrieved_contexts</code> 是系统实际检索到的，<code>reference_contexts</code> 是「本应检索到」的标准资料</li>
-    <li>前者给单轮样本用，后者给多轮样本用</li>
-    <li><code>retrieved_contexts</code> 是标准答案，<code>reference_contexts</code> 是检索结果</li>
+    <li>字段虽是 <code>None</code> 但仍存在，<code>get_features()</code> 照样列出它，校验通过</li>
+    <li><code>to_dict()</code> 用 <code>exclude_none=True</code> 丢掉了 None 字段，<code>reference</code> 不出现在 features 里，缺列校验直接报错</li>
+    <li><code>None</code> 被当成空字符串参与计算，指标照常运行只是分数偏低</li>
+    <li>ragas 会在校验时用 LLM 自动把缺失的 <code>reference</code> 补上再继续</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
-    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。retrieved 是考生实际翻到的资料，reference 是标准资料。二者分开存，ContextRecall 等指标才能衡量「该召回的是否都召回了」。</div></div></div>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。<code>to_dict()</code> 即 <code>model_dump(exclude_none=True)</code>，<code>get_features()</code> 只返回它的 key——所以 None 字段会「凭空消失」，而不是以 None 形式留在 features 里。指标缺列校验看的正是 <code>get_features()</code>，于是忘填 <code>reference</code> 会被判成「缺这一列」直接报错。这正是「字段全 Optional + 按需带列」的另一面。</div></div></div>
   </details>
 </div>
 </div>

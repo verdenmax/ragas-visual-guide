@@ -382,16 +382,16 @@ harmfulness = AspectCritic(
   </details>
 </div>
 <div class="quiz">
-  <div class="qn">2. <code>AspectCritic</code> 与 AnswerRelevancy / FactualCorrectness 在「所属栈」上有何不同？</div>
+  <div class="qn">2. AnswerRelevancy 的 <code>strictness</code> 会真的反推多次问题。照此推想，给 <code>AspectCritic</code> 设 <code>strictness=5</code> 是不是就让它判定 5 次再多数投票？</div>
   <ol class="opts">
-    <li><code>AspectCritic</code> 目前「只有 legacy 版」（导入会触发废弃告警），尚未迁移到 collections</li>
-    <li>三者都只有 legacy 版</li>
-    <li>三者都已在 collections 里</li>
-    <li><code>AspectCritic</code> 在 collections，另两个在 legacy</li>
+    <li>是，5 次独立判定取多数，结论更稳</li>
+    <li>会，但只在多轮样本上生效，单轮样本忽略该参数</li>
+    <li>不会：<code>_ascore</code> 只 <code>generate</code> 一次，把单元素列表传进 <code>_compute_score</code>，那条 <code>Counter</code> 投票分支只在 1 个元素上跑，<code>strictness&gt;1</code> 实为 no-op</li>
+    <li>不会：<code>strictness&gt;1</code> 会直接报错，AspectCritic 只允许 strictness=1</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
-    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。AnswerRelevancy 与 FactualCorrectness 在现代 collections；<code>AspectCritic</code> 仍停在经典栈（<code>from ragas.metrics import</code> 会告警），底层是 <code>MetricWithLLM</code> + 单 / 多轮。</div></div></div>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：C</strong>。同名参数在同一课里行为不同，正是易混点。AnswerRelevancy 真的 <code>for _ in range(strictness)</code> 反推多次；而 AspectCritic 的 <code>_ascore</code> 只调一次 <code>generate</code>、再 <code>_compute_score([response])</code>——<code>Counter(...).most_common(1)</code> 作用在单元素列表上，结果就是那唯一的 verdict。构造时虽把 strictness 强制成奇数（像是为投票预留），但当前实现并未多次采样，所以 <code>strictness&gt;1</code> 不改变任何行为（ragas docstring 称其多数投票，属已知出入，读内部实现以代码为准）。</div></div></div>
   </details>
 </div>
 </div>

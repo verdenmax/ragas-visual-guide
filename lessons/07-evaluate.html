@@ -368,13 +368,14 @@ df = result.to_pandas()  <span class="cm"># 原始数据列 + 每个指标一列
 <div class="quiz">
   <div class="qn">2. 为什么 <code>result.total_cost()</code> / <code>total_tokens()</code> 需要在调用 <code>evaluate</code> 时传 <code>token_usage_parser</code> 才能用？</div>
   <ol class="opts">
-    <li>因为 <code>total_cost</code> 已被废弃</li>
+    <li>因为 parser 内置了各模型单价，传了它 ragas 才知道怎么把 token 换算成钱</li>
+    <li>因为只有显式传 parser，结果对象才会在内存里保留每行原始响应供事后统计</li>
     <li>因为不同 LLM 回包里 token 用量的格式不一，需要 parser 告诉 ragas 怎么解析，否则它无从统计</li>
     <li>因为统计 token 会拖慢评测，ragas 默认关闭、传了 parser 才开启</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
-    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。各家模型返回 token 用量的字段格式不同，<code>token_usage_parser</code> 负责抽取；没配它，<code>total_tokens</code> / <code>total_cost</code> 会抛错提示「未配置成本计算」。</div></div></div>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：C</strong>。各家模型返回 token 用量的字段格式不同，<code>token_usage_parser</code> 只负责「从回包里抽出用量数字」；没配它连 token 数都拿不到，<code>total_tokens</code> / <code>total_cost</code> 会抛「未配置成本计算」。注意它不管单价——把 token 换算成钱要另配每千 token 价格。</div></div></div>
   </details>
 </div>
 </div>

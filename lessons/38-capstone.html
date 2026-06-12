@@ -415,16 +415,16 @@ v1 = <span class="kw">await</span> run_eval.arun(golden, name=<span class="st">"
   </details>
 </div>
 <div class="quiz">
-  <div class="qn">2. capstone 的链路 <code>TestsetGenerator</code> → <code>to_evaluation_dataset</code> → 选指标 → <code>@experiment</code>，体现了全书怎样的主线？</div>
+  <div class="qn">2. 你用 <code>TestsetGenerator</code> 造好测试集、<code>to_evaluation_dataset()</code> 转成评测集，准备直接算 Faithfulness——为什么这一步通常得先把你的 RAG 再跑一遍？</div>
   <ol class="opts">
-    <li>造题线产出经 <code>to_evaluation_dataset</code> 接回评测线，再用实验跑分对比迭代，两大支柱在此合龙闭环</li>
-    <li><code>@experiment</code> 其实只用于生成测试集</li>
-    <li>只有纯手工写的数据集才能拿去评测</li>
-    <li>测试生成与评测是两条永不相交的平行线</li>
+    <li>因为样本只有 <code>user_input</code> 和 <code>reference</code>，缺你系统的 <code>response</code> / <code>retrieved_contexts</code></li>
+    <li>因为不重跑，<code>reference</code> 就不会被引擎识别为标准答案</li>
+    <li>因为造题和评测必须用同一个 LLM 实例，重跑是为了对齐模型</li>
+    <li>因为 <code>to_evaluation_dataset()</code> 会把字段打乱，必须重跑来恢复顺序</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
-    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。<code>to_evaluation_dataset</code> 是「测试生成线」与「评测线」的接口：造好题→转评测集→选 <code>collections</code> 指标→<code>@experiment</code> 跑并对比，正是全书「改→跑→比」闭环的完整落地。</div></div></div>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。生成器产出的是「黄金题」：每个 <code>eval_sample</code> 只带 <code>user_input</code>、<code>reference</code> 及它依据的 <code>reference_contexts</code>，并没有 <code>response</code>（你系统的回答）和 <code>retrieved_contexts</code>（你检索到的资料）。而 Faithfulness / AnswerRelevancy 恰恰要核对系统输出——所以得在 <code>@experiment</code> 里对每个 <code>user_input</code> 现跑一遍你的 RAG，补上 <code>response</code> / <code>retrieved_contexts</code> 再打分。这正是「造题」与「评测」两次生成的分工。</div></div></div>
   </details>
 </div>
 <div class="card spark">

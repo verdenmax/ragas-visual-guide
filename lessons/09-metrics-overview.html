@@ -385,16 +385,16 @@ ragas 内置了几十个指标，但它们正处在<strong>两代并存</strong>
   </details>
 </div>
 <div class="quiz">
-  <div class="qn">2. 旧代码 <code>from ragas.metrics import Faithfulness</code> 仍能用、但会告警。这种「导入即告警」是为了什么？</div>
+  <div class="qn">2. 你记住了「具名指标都从 <code>ragas.metrics.collections</code> 导入」，于是写下 <code>from ragas.metrics.collections import AspectCritic</code>，结果会怎样？</div>
   <ol class="opts">
-    <li>在 import 时就抛出 <code>ImportError</code>，强制用户立刻改用新路径</li>
-    <li>用模块级 <code>__getattr__</code> 做平滑过渡：旧路径暂时可用、同时提示迁移到 collections，到 v1.0 再移除</li>
-    <li>让从旧路径导入的 Faithfulness 自动切换成 collections 的新实现</li>
-    <li>立刻删除旧路径，逼用户马上重写</li>
+    <li>导入成功且不告警，因为 collections 里的指标都不发弃用警告</li>
+    <li>报 <code>ImportError</code>：AspectCritic 是例外，collections 暂未提供，目前只能 <code>from ragas.metrics import AspectCritic</code>（会告警）</li>
+    <li>能导入，但它其实是空壳，运行 <code>ascore</code> 时才报错</li>
+    <li>正常导入，AspectCritic 和其他具名指标一样早已迁进 collections</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
-    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。<code>ragas/metrics/__init__.py</code> 把具名指标放进 <code>_DEPRECATED_METRICS</code>，由模块级 <code>__getattr__</code> 拦截、发告警后仍返回实现；算法与分数口径不变，只是提示改导入路径，实现平滑迁移。</div></div></div>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。「具名指标走 collections」有例外：<code>AspectCritic</code>（及检索类的非 LLM 版）目前只在 legacy <code>ragas.metrics</code>，collections 的 <code>__all__</code> 并不含它。有意思的是，从 <code>ragas.metrics</code> 导它仍会发「请改用 collections」的告警——可 collections 偏偏还没有，于是这条告警对 AspectCritic 暂时「无处可去」，照旧用 legacy 即可。</div></div></div>
   </details>
 </div>
 </div>

@@ -366,16 +366,16 @@ testset = generator.generate_with_langchain_docs(docs, testset_size=10)   <span 
   </details>
 </div>
 <div class="quiz">
-  <div class="qn">2. <code>TestsetGenerator.from_langchain</code> / <code>from_llama_index</code> 这类入口体现了什么设计意图？</div>
+  <div class="qn">2. <code>TestsetGenerator.from_langchain(llm, embedding_model)</code> 到底替你做了什么？</div>
   <ol class="opts">
-    <li>强迫用户放弃原框架、把数据全部重写一遍</li>
-    <li>因为不提供入口就根本无法生成测试集</li>
-    <li>因为 ragas 只能读这两个框架的数据</li>
-    <li>接住各框架的文档 / 对象，转成 ragas 能用的输入，让你在原有生态里平滑接入测试生成</li>
+    <li>顺手接收你的 LangChain 文档、自动切块并建好知识图谱，省掉 transforms 那一步</li>
+    <li>因为 ragas 只能读 LangChain / LlamaIndex 两家的数据，所以必须走这个入口</li>
+    <li>强迫你放弃 LangChain，把 LLM 和数据全部改写成 ragas 原生对象</li>
+    <li>把 LangChain 的 LLM / Embedding 包成 ragas 的 wrapper、装好一个生成器；喂文档、切块、建知识图谱是后续 <code>generate_with_langchain_docs</code> + transforms 的事</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
-    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。<code>from_langchain</code> / <code>from_llama_index</code> 把别家的文档对象「翻译」成 ragas 的输入——你不必离开熟悉的框架，集成层替你做适配，接入成本因此很低。</div></div></div>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。<code>from_langchain</code> 只做适配：把 <code>lc_llm</code> / <code>lc_embeddings</code> 包成 <code>LangchainLLMWrapper</code> / <code>LangchainEmbeddingsWrapper</code> 并初始化一个（空的）KnowledgeGraph，让你在原生态里平滑接入。真正喂文档、切块、抽关系建图，是后一步 <code>generate_with_langchain_docs(docs, ...)</code> 配 transforms 完成的——别把「顺带建好图」的功劳记到 <code>from_langchain</code> 头上。</div></div></div>
   </details>
 </div>
 <div class="card spark">

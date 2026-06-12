@@ -352,26 +352,27 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
 <div class="quiz">
   <div class="qn">1. 评测中单个任务抛错时，引擎默认把该结果转成 <code>np.nan</code> 而不是直接崩溃。这样设计是为了什么？</div>
   <ol class="opts">
-    <li>为了节省 token</li>
+    <li>为了把失败行直接记 0 分，对系统从严打分</li>
     <li>为了让出错的行用全局均值自动填补，保持样本量不变</li>
     <li>因为 <code>np.nan</code> 会触发 ragas 自动换一个备用 LLM 重算该行</li>
     <li>为了让个别失败行不中断整轮评测，且均值用 <code>safe_nanmean</code> 自动忽略它</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
-    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。默认 <code>raise_exceptions=False</code>，单行失败记 <code>np.nan</code>；汇总时 <code>safe_nanmean</code> 会忽略 <code>NaN</code>，所以个别失败行不会拖垮整批，也不会污染均值。</div></div></div>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。默认 <code>raise_exceptions=False</code>，单行失败记 <code>np.nan</code>；汇总时 <code>safe_nanmean</code> 会忽略 <code>NaN</code>，所以个别失败行不会拖垮整批，也不会污染均值。注意它既不是记 0 分（那会拉低均值），也不是用均值回填。</div></div></div>
   </details>
 </div>
 <div class="quiz">
   <div class="qn">2. <code>evaluate()</code> 与 <code>aevaluate()</code> 是什么关系？</div>
   <ol class="opts">
+    <li><code>evaluate()</code> 是同步的，所以比 <code>aevaluate()</code> 更快</li>
     <li><code>aevaluate()</code> 是异步真实现，<code>evaluate()</code> 只是它的同步外壳</li>
-    <li>两者完全独立、算法不同</li>
-    <li><code>evaluate()</code> 因为是同步的所以更快</li>
+    <li>两者完全独立、底层算法不同</li>
+    <li><code>evaluate()</code> 才是真实现，<code>aevaluate()</code> 只是给它套了层 async 包装</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
-    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：A</strong>。async-first 设计：真正并发干活的是 <code>aevaluate()</code>，<code>evaluate()</code> 只套一层同步外壳（必要时借 <code>nest_asyncio</code> 兼容 Jupyter）。二者都会发 <code>DeprecationWarning</code> 指向 <code>@experiment</code>。</div></div></div>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。async-first 设计：真正并发干活的是 <code>aevaluate()</code>，<code>evaluate()</code> 只套一层同步外壳（必要时借 <code>nest_asyncio</code> 兼容 Jupyter）——方向别记反。二者都会发 <code>DeprecationWarning</code> 指向 <code>@experiment</code>。</div></div></div>
   </details>
 </div>
 <div class="card spark">

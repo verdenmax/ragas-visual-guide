@@ -361,16 +361,16 @@ print(score.value, score.reason)  <span class="cm"># 'accurate' + 给分理由</
   </details>
 </div>
 <div class="quiz">
-  <div class="qn">2. 为什么说「我觉得还行」（vibe check）式的判断需要被 ragas 取代？</div>
+  <div class="qn">2. ragas 自己也大量用 LLM 当裁判——可 LLM 打分同样会「看心情」浮动。那它凭什么比「我觉得还行」更可靠？</div>
   <ol class="opts">
-    <li>因为 LLM 没办法评价自己生成的内容，只能靠人工</li>
-    <li>因为这样能显著省钱</li>
-    <li>因为 vibe check 必须先攒够大量人工标注才能给出结论，太重了</li>
-    <li>因为主观判断不可量化、不可复现，换个人或换一天结论就变</li>
+    <li>因为 ragas 选用的裁判模型比人聪明，判断天生更准</li>
+    <li>因为 LLM 裁判每次都给出一模一样的分数，天然可复现</li>
+    <li>因为改用 LLM 打分后评分就完全客观，不再受任何主观因素影响</li>
+    <li>靠固定数据集 + 同一套 prompt + 可复现的实验记录，把波动锁住、让分数能横向对比和回归</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
-    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。ragas 用客观指标 + 固定数据集 + 实验记录，把「感觉还行」升级成可量化、可复现、可迭代的系统化闭环——这正是 vibe check 做不到的。</div></div></div>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。关键不是「换了个更聪明 / 更客观的裁判」——LLM 裁判本身一样主观、会波动。ragas 的可靠来自把评测装进标准化框架：同一份数据集、同一套 prompt、可追溯的实验记录，于是分数可比较、可复现、可回归。vibe check 缺的正是这套框架，而不是缺一个更强的裁判。</div></div></div>
   </details>
 </div>
 <div class="card spark">

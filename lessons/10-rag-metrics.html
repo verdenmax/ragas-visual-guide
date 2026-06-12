@@ -382,16 +382,16 @@ print(r_faith.value, r_prec.value, r_rec.value, r_rel.value)  <span class="cm">#
   </details>
 </div>
 <div class="quiz">
-  <div class="qn">2. RAG 四件套为什么要分成「两个查检索质量、两个查生成质量」？</div>
+  <div class="qn">2. 线上 RAG 答案频繁「编造」——检索到的资料里明明没有，模型却自信地说出来。四件套里最该盯这个问题的是哪个？</div>
   <ol class="opts">
-    <li>因为四个指标必须成套使用，缺一个就无法出分</li>
-    <li>因为检索质量与生成质量本质是同一回事，分开只是表述习惯</li>
-    <li>因为检索和生成必须用不同的 LLM</li>
-    <li>RAG 同时依赖检索与生成两端，分开各盯一段，才能定位问题出在检索还是生成</li>
+    <li>AnswerRelevancy：答案是否切题</li>
+    <li>ContextPrecision：检索结果的排序质量</li>
+    <li>ContextRecall：该召回的资料是否都召回了</li>
+    <li>Faithfulness：答案是否「只依据检索到的上下文」、有没有无中生有</li>
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
-    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。ContextPrecision / ContextRecall 查检索质量，Faithfulness / AnswerRelevancy 查生成质量；两端分别体检，才能判断 RAG 是「检索没找对」还是「答案跑偏」。</div></div></div>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：D</strong>。「编造」是生成端的 hallucination：检索其实给了对的资料，是模型没忠于它。<code>Faithfulness</code> 正是把答案拆成原子陈述、逐条核对能否由 <code>retrieved_contexts</code> 推出——别被名字带「检索」字样的 ContextPrecision / ContextRecall 误导，它俩管的是检索端。<code>AnswerRelevancy</code> 同属生成端但只管「切不切题」，答非所问才归它。</div></div></div>
   </details>
 </div>
 <div class="card spark">

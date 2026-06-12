@@ -373,7 +373,7 @@ make run-ci                 <span class="cm"># 提 PR 前本地复刻一遍 CI</
   </ol>
   <details class="accordion">
     <summary>看答案与解析 <span class="hint">点击展开</span></summary>
-    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。真调 LLM 又慢、又花钱、又有随机性，测试会时红时绿。fake fixtures 给出可控的确定输出，把「指标逻辑对不对」稳稳验证下来，CI 不被外部因素干扰。</div></div></div>
+    <div class="acc-body"><div class="qa"><div class="a"><strong>答案：B</strong>。关键区分：<code>fake_llm</code>（<code>EchoLLM</code>）把输入原样回显、<strong>完全确定</strong>，断言能写死；但 <code>fake_embedding</code>（<code>EchoEmbedding</code>）其实是 <code>np.random.rand(768)</code> 且<strong>没设种子</strong>，并不可复现——需要可复现向量的测试用的是另一个定种子的 <code>mock_embedding</code>（<code>np.random.seed(42)</code>）。fake 系列的共同价值是：不碰网络、不计费、不受真实模型采样波动，CI 才能稳定红绿。</div></div></div>
   </details>
 </div>
 <div class="quiz">
