@@ -279,6 +279,21 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
   最后把零散分数<strong>汇总成一张成绩单</strong>（<span class="inline">EvaluationResult</span>）。
 </div>
 
+<p><strong>本课流程一眼看</strong>：一次 <span class="inline">evaluate</span> 把「样本 + 指标」一路变成成绩单 👇</p>
+<div class="flow">
+  <div class="node"><div class="nt">Dataset + metrics</div><div class="nd">样本 + 评分标准</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">校验·规整</div><div class="nd">转 EvaluationDataset</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">注入裁判</div><div class="nd">缺则建 gpt-4o-mini + init</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">拆任务</div><div class="nd">每个 样本 × 指标</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">并发打分</div><div class="nd">Executor · 失败转 nan</div></div>
+  <div class="arrow">→</div>
+  <div class="node hl"><div class="nt">EvaluationResult</div><div class="nd">汇总成绩单</div></div>
+</div>
+
 <h2>生命周期：从样本到成绩单的 6 步</h2>
 <p><span class="inline">evaluate()</span> 只是同步外壳，真正干活的是 <span class="inline">aevaluate()</span>。它依次做这 6 件事：</p>
 

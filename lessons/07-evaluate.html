@@ -283,6 +283,19 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
   本课讲的 <span class="inline">evaluate()</span> / <span class="inline">aevaluate()</span> <strong>都会发 <span class="mono">DeprecationWarning</span></strong>、官方指向 <span class="mono">@experiment</span>（<a href="08-experiment.html">第 8 课</a>）。它仍可用、也值得理解其机制，但<strong>新项目请优先用实验装饰器</strong>——所以先点明状态，再来跑它。
 </div>
 
+<p><strong>本课流程一眼看</strong>：<span class="inline">evaluate</span> 一键阅卷的内部链路 👇</p>
+<div class="flow">
+  <div class="node"><div class="nt">dataset + metrics</div><div class="nd">考卷 + 评分标准</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">补裁判</div><div class="nd">缺 LLM 则建 gpt-4o-mini</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">并发打分</div><div class="nd">每个 样本 × 指标 ascore</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">汇总</div><div class="nd">safe_nanmean 忽略失败行</div></div>
+  <div class="arrow">→</div>
+  <div class="node hl"><div class="nt">EvaluationResult</div><div class="nd">to_pandas · total_cost*</div></div>
+</div>
+
 <h2>最小可跑示例</h2>
 <pre class="code"><span class="kw">from</span> ragas <span class="kw">import</span> evaluate, EvaluationDataset, SingleTurnSample
 <span class="kw">from</span> ragas.metrics <span class="kw">import</span> Faithfulness

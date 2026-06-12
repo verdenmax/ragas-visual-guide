@@ -279,6 +279,13 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
 
 <h2>ContextPrecision：逐条判定 + 平均精度</h2>
 <p><span class="inline">ContextPrecisionWithReference</span> 的 <span class="inline">ascore</span> 对<strong>每条检索结果各问一次 LLM</strong>："这条 context 对得出参考答案有没有用？" 拿到一串 0/1 的 <span class="mono">verdict</span>，再算<strong>平均精度（average precision）</strong>：</p>
+<div class="flow">
+  <div class="node"><div class="nt">每条 context</div><div class="nd">逐条遍历</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">问 LLM</div><div class="nd">对得出 reference 有用? 0/1</div></div>
+  <div class="arrow">→</div>
+  <div class="node hl"><div class="nt">平均精度 MAP</div><div class="nd">命中越靠前分越高</div></div>
+</div>
 <pre class="code"><span class="cm"># 逐条判定：每个 context 调一次 agenerate</span>
 verdicts = []
 <span class="kw">for</span> context <span class="kw">in</span> retrieved_contexts:
@@ -300,6 +307,13 @@ verdicts = []
 
 <h2>ContextRecall：逐句归因</h2>
 <p><span class="inline">ContextRecall</span> 反过来——把 <span class="mono">reference</span> 拆成一句句陈述，逐句判断<strong>能不能归因到检索到的 context</strong>（<span class="mono">attributed</span> 0/1），再算占比：</p>
+<div class="flow">
+  <div class="node"><div class="nt">reference 拆句</div><div class="nd">标准答案逐句</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">逐句归因</div><div class="nd">能否在 context 找到? 0/1</div></div>
+  <div class="arrow">→</div>
+  <div class="node hl"><div class="nt">占比</div><div class="nd">归因句数 ÷ 总句数</div></div>
+</div>
 <pre class="code"><span class="cm"># 一次调用拿回所有句子的归因分类</span>
 context = <span class="st">"\n"</span>.join(retrieved_contexts)
 result = <span class="kw">await</span> self.llm.agenerate(self.prompt.to_string(input_data), ContextRecallOutput)

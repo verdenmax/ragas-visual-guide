@@ -297,17 +297,23 @@ print(exp)   <span class="cm"># Experiment(name=..., len=...)，结果已存进 
 
 <p>被装饰的函数接收<strong>一行数据</strong>、返回"要留痕的结果"（dict 或 pydantic 模型）；真正的批量执行交给 <span class="inline">arun</span>。</p>
 
+<p><strong>本课流程一眼看</strong>：<span class="inline">await fn.arun(dataset)</span> 这一句，背后顺次做了 5 件事 👇</p>
+<div class="vflow">
+  <div class="step"><div class="num">1</div><div class="sc"><h4>取名</h4>
+    <p>没给 <span class="mono">name</span> 就用 <span class="mono">memorable_names</span> 起个好记的名字（有 <span class="mono">name_prefix</span> 则拼前缀）</p></div></div>
+  <div class="step"><div class="num">2</div><div class="sc"><h4>解析 backend</h4>
+    <p>传入的 / 装饰器默认的，否则沿用 <span class="mono">dataset.backend</span>，经 <span class="mono">_resolve_backend</span> 解析</p></div></div>
+  <div class="step"><div class="num">3</div><div class="sc"><h4>建 Experiment</h4>
+    <p>新建一个 <span class="mono">Experiment</span>（继承 <span class="mono">DataTable</span>，<a href="06-two-datasets.html">第 6 课</a>）</p></div></div>
+  <div class="step"><div class="num">4</div><div class="sc"><h4>并发跑</h4>
+    <p>每行包成任务，用 <span class="mono">asyncio.as_completed</span> 并发执行、<span class="mono">tqdm</span> 显示进度</p></div></div>
+  <div class="step"><div class="num">5</div><div class="sc"><h4>存盘</h4>
+    <p><span class="mono">save()</span> 落 backend 后返回该 <span class="mono">Experiment</span></p></div></div>
+</div>
+
 <details class="accordion">
-  <summary><span class="badge-num">1</span> arun 内部的 5 个动作：取名 → 解析 backend → 建 Experiment → 并发跑 → 存盘 <span class="hint">点击展开详解</span></summary>
+  <summary><span class="badge-num">1</span> 深挖：单行任务失败了，整轮会中断吗？<span class="hint">点击展开详解</span></summary>
   <div class="acc-body">
-    <div class="qa">
-      <div class="q">🧪 五步拆解</div>
-      <div class="a"><strong>①</strong> 没给 <span class="inline">name</span> 就用 <span class="inline">memorable_names.generate_unique_name()</span> 起个好记的名字（有 <span class="inline">name_prefix</span> 则拼前缀）；
-        <strong>②</strong> backend = 传入的 / 装饰器默认的，否则沿用 <span class="inline">dataset.backend</span>，经 <span class="inline">Experiment._resolve_backend</span> 解析；
-        <strong>③</strong> 建一个 <span class="inline">Experiment</span>（继承 <span class="inline">DataTable</span>，<a href="06-two-datasets.html">第 6 课</a>）；
-        <strong>④</strong> 把每行包成任务，用 <span class="inline">asyncio.as_completed</span> 并发执行，<span class="inline">tqdm</span> 显示进度；
-        <strong>⑤</strong> <span class="inline">save()</span> 落盘后返回该 <span class="inline">Experiment</span>。</div>
-    </div>
     <div class="qa">
       <div class="q">✅ 单行失败会中断整轮吗</div>
       <div class="a">不会。<span class="inline">as_completed</span> 循环里逐个 <span class="inline">await</span>，单个任务抛错会被 <span class="mono">try/except</span> 捕获、打印一条 warning 后<strong>继续</strong>——和 <span class="inline">evaluate</span> 的"失败记 NaN"异曲同工，整批不被一行拖垮。</div>

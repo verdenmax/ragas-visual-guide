@@ -197,6 +197,17 @@ Faithfulness（忠实度）查的是<strong>幻觉</strong>：答案里的每一
   判作业有没有"瞎编"，老师不会整篇笼统打分，而是<strong>先把答案拆成一句句论点</strong>，再拿着<strong>参考资料逐句核对</strong>："这句资料里有→给过；这句资料没提→打叉。"最后<strong>过关句数 ÷ 总句数</strong>就是忠实度。Faithfulness 干的正是这件事。
 </div>
 
+<p><strong>本课流程一眼看</strong>：Faithfulness 查幻觉的两步走 👇</p>
+<div class="flow">
+  <div class="node"><div class="nt">答案 response</div><div class="nd">+ retrieved_contexts</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">① 拆句</div><div class="nd">拆成原子陈述 claims</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">② 逐句 NLI</div><div class="nd">对照 context 判 0/1</div></div>
+  <div class="arrow">→</div>
+  <div class="node hl"><div class="nt">③ 计分</div><div class="nd">支持句数 ÷ 总句数</div></div>
+</div>
+
 <h2>两步流水线：拆句 → 逐句查证</h2>
 <p>现代实现 <span class="inline">Faithfulness(BaseMetric)</span> 的 <span class="inline">ascore</span> 把整件事切成三段，全程用 instructor LLM 拿结构化结果：</p>
 <pre class="code"><span class="kw">async def</span> <span class="fn">ascore</span>(self, user_input, response, retrieved_contexts):
@@ -289,6 +300,13 @@ LESSON_16 = r"""
 
 <h2>ContextPrecision：逐条判定 + 平均精度</h2>
 <p><span class="inline">ContextPrecisionWithReference</span> 的 <span class="inline">ascore</span> 对<strong>每条检索结果各问一次 LLM</strong>："这条 context 对得出参考答案有没有用？" 拿到一串 0/1 的 <span class="mono">verdict</span>，再算<strong>平均精度（average precision）</strong>：</p>
+<div class="flow">
+  <div class="node"><div class="nt">每条 context</div><div class="nd">逐条遍历</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">问 LLM</div><div class="nd">对得出 reference 有用? 0/1</div></div>
+  <div class="arrow">→</div>
+  <div class="node hl"><div class="nt">平均精度 MAP</div><div class="nd">命中越靠前分越高</div></div>
+</div>
 <pre class="code"><span class="cm"># 逐条判定：每个 context 调一次 agenerate</span>
 verdicts = []
 <span class="kw">for</span> context <span class="kw">in</span> retrieved_contexts:
@@ -310,6 +328,13 @@ verdicts = []
 
 <h2>ContextRecall：逐句归因</h2>
 <p><span class="inline">ContextRecall</span> 反过来——把 <span class="mono">reference</span> 拆成一句句陈述，逐句判断<strong>能不能归因到检索到的 context</strong>（<span class="mono">attributed</span> 0/1），再算占比：</p>
+<div class="flow">
+  <div class="node"><div class="nt">reference 拆句</div><div class="nd">标准答案逐句</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">逐句归因</div><div class="nd">能否在 context 找到? 0/1</div></div>
+  <div class="arrow">→</div>
+  <div class="node hl"><div class="nt">占比</div><div class="nd">归因句数 ÷ 总句数</div></div>
+</div>
 <pre class="code"><span class="cm"># 一次调用拿回所有句子的归因分类</span>
 context = <span class="st">"\n"</span>.join(retrieved_contexts)
 result = <span class="kw">await</span> self.llm.agenerate(self.prompt.to_string(input_data), ContextRecallOutput)
@@ -378,6 +403,15 @@ LESSON_17 = r"""
 
 <h2>AnswerRelevancy：反向出题 + 余弦相似度</h2>
 <p>切题与否不好直接打分，于是<strong>反过来</strong>：让 LLM 从 <span class="mono">response</span> 反推出若干个"它像在回答的问题"，再和原始 <span class="mono">user_input</span> 比<strong>余弦相似度</strong>。反推次数由 <span class="inline">strictness</span> 控制（<strong>默认 3</strong>）：</p>
+<div class="flow">
+  <div class="node"><div class="nt">答案 response</div><div class="nd">待评切题度</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">反向出题 ×N</div><div class="nd">LLM 反推可能的问题</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">余弦相似度</div><div class="nd">反推问题 vs 原问题</div></div>
+  <div class="arrow">→</div>
+  <div class="node hl"><div class="nt">均值</div><div class="nd">全敷衍 → 0 分</div></div>
+</div>
 <pre class="code"><span class="kw">for</span> _ <span class="kw">in</span> range(self.strictness):           <span class="cm"># strictness 默认 3</span>
     result = <span class="kw">await</span> self.llm.agenerate(
         self.prompt.to_string(AnswerRelevanceInput(response=response)),
@@ -392,6 +426,13 @@ score = cosine_sim.mean() * int(<span class="kw">not</span> all_noncommittal)   
 
 <h2>FactualCorrectness：双向 NLI → P/R/F1</h2>
 <p>事实一致度把 Faithfulness 的"拆句 + NLI"（<a href="15-faithfulness-internals.html">第 15 课</a>）升级成<strong>双向</strong>核对，再套上分类指标的 TP/FP/FN：</p>
+<div class="flow">
+  <div class="node"><div class="nt">拆 response 的 claim</div><div class="nd">对 reference 做 NLI → TP/FP</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">反向：拆 reference</div><div class="nd">对 response 做 NLI → FN（非 precision）</div></div>
+  <div class="arrow">→</div>
+  <div class="node hl"><div class="nt">P / R / F1</div><div class="nd">按 mode（默认 f1）</div></div>
+</div>
 <pre class="code"><span class="cm"># ① 拆 response 的 claim，逐条对 reference 做 NLI</span>
 reference_response = <span class="kw">await</span> self._decompose_and_verify_claims(response, reference)
 <span class="cm"># ② 非 precision 模式：再拆 reference，对 response 做 NLI（反方向）</span>

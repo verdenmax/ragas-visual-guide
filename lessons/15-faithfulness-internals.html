@@ -276,6 +276,17 @@ Faithfulness（忠实度）查的是<strong>幻觉</strong>：答案里的每一
   判作业有没有"瞎编"，老师不会整篇笼统打分，而是<strong>先把答案拆成一句句论点</strong>，再拿着<strong>参考资料逐句核对</strong>："这句资料里有→给过；这句资料没提→打叉。"最后<strong>过关句数 ÷ 总句数</strong>就是忠实度。Faithfulness 干的正是这件事。
 </div>
 
+<p><strong>本课流程一眼看</strong>：Faithfulness 查幻觉的两步走 👇</p>
+<div class="flow">
+  <div class="node"><div class="nt">答案 response</div><div class="nd">+ retrieved_contexts</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">① 拆句</div><div class="nd">拆成原子陈述 claims</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="nt">② 逐句 NLI</div><div class="nd">对照 context 判 0/1</div></div>
+  <div class="arrow">→</div>
+  <div class="node hl"><div class="nt">③ 计分</div><div class="nd">支持句数 ÷ 总句数</div></div>
+</div>
+
 <h2>两步流水线：拆句 → 逐句查证</h2>
 <p>现代实现 <span class="inline">Faithfulness(BaseMetric)</span> 的 <span class="inline">ascore</span> 把整件事切成三段，全程用 instructor LLM 拿结构化结果：</p>
 <pre class="code"><span class="kw">async def</span> <span class="fn">ascore</span>(self, user_input, response, retrieved_contexts):
