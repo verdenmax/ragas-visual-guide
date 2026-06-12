@@ -323,7 +323,7 @@ print(result.value, result.reason)  <span class="cm"># 'accurate' / 'inaccurate'
 result = sentiment.score(user_input=<span class="st">"今天如何？"</span>, response=<span class="st">"It was great!"</span>)
 print(result.value)  <span class="cm"># "positive"</span></pre>
 
-<p>装饰器会按 <span class="inline">allowed_values</span> 的类型<strong>自动选指标种类</strong>（list → 离散、tuple → 数值、int → 排序）。函数返回的普通值会被自动包成 <span class="inline">MetricResult</span> 并按 allowed_values 校验。
+<p>装饰器会按 <span class="inline">allowed_values</span> 的类型<strong>自动选指标种类</strong>（list → 离散、tuple / range → 数值、int → 排序）。函数返回的普通值会被自动包成 <span class="inline">MetricResult</span> 并按 allowed_values 校验。
 <span class="inline">score()</span> / <span class="inline">ascore()</span> <strong>只接受关键字参数</strong>——传位置参数会抛出一条带纠正提示的 <span class="mono">TypeError</span>。</p>
 
 <details class="accordion">

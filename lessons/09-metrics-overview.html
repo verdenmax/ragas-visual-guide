@@ -347,7 +347,7 @@ ragas 内置了几十个指标，但它们正处在<strong>两代并存</strong>
 
 <div class="card detail">
   <div class="tag">🔬 源码对应</div>
-  两代指标的"门牌"都在 <span class="mono">src/ragas/metrics/__init__.py</span>：<span class="mono">__all__</span> 只导出基类与 Simple 栈（<span class="mono">Metric</span> / <span class="mono">MetricWithLLM</span> / <span class="mono">DiscreteMetric</span> / <span class="mono">NumericMetric</span> / <span class="mono">RankingMetric</span> / <span class="mono">MetricResult</span> …），具名指标进 <span class="mono">_DEPRECATED_METRICS</span> 字典，由模块级 <span class="mono">__getattr__</span> 拦截并发 <span class="mono">DeprecationWarning</span>（文案 <span class="mono">_DEPRECATION_MESSAGE</span>）。
+  两代指标的"门牌"都在 <span class="mono">src/ragas/metrics/__init__.py</span>：<span class="mono">__all__</span>（基类 + Simple 栈）、<span class="mono">_DEPRECATED_METRICS</span>（具名指标）、<span class="mono">__getattr__</span>、<span class="mono">_DEPRECATION_MESSAGE</span>——机制见上方手风琴，此处只列符号位置。具名指标的现代实现在 <span class="mono">src/ragas/metrics/collections/</span>。
   现代具名指标的"正门"是 <span class="mono">src/ragas/metrics/collections/__init__.py</span>（其 <span class="mono">__all__</span> 列出 Faithfulness、ContextPrecision、ToolCallAccuracy… ，但<strong>不含</strong> AspectCritic）。单轮 / 多轮之分见 <span class="mono">metrics/base.py</span> 的 <span class="mono">MetricType</span>。
 </div>
 
@@ -356,7 +356,7 @@ ragas 内置了几十个指标，但它们正处在<strong>两代并存</strong>
   <ul>
     <li><strong>两代指标但算法一致</strong>：collections 是同一套打分逻辑的"现代封装"，迁移只换导入路径，<strong>分数口径不变</strong>。</li>
     <li><strong>接口统一、可混用组合</strong>：collections 指标都是"构造注入依赖 → <span class="inline">await ascore(**kwargs)</span> 返回 <span class="inline">MetricResult</span>"，不同指标能拼成自己的套餐。</li>
-    <li><strong>公开面小而稳</strong>：<span class="inline">__all__</span> 只留基类与 Simple 栈，具名指标集中到 collections，旧路径用 <span class="inline">__getattr__</span> 平滑过渡到 v1.0。</li>
+    <li><strong>公开面小而稳</strong>：顶层只稳定导出基类与 Simple 栈，具名指标集中到 collections——升级时不易误伤用户代码（旧路径如何平滑过渡到 v1.0，见上方手风琴）。</li>
   </ul>
 </div>
 

@@ -322,7 +322,8 @@ r_rel   = <span class="kw">await</span> arel.ascore(user_input=q, response=ans)
 print(r_faith.value, r_prec.value, r_rec.value, r_rel.value)  <span class="cm"># 四个 0~1 分数</span></pre>
 
 <p>四个指标都返回 <span class="inline">MetricResult</span>，取 <span class="inline">.value</span> 拿分数（<a href="14-metric-result.html">第 14 课</a>）。
-注意 embedding 工厂从 <span class="mono">ragas.embeddings.base</span> 导入——从 <span class="mono">ragas.embeddings</span> 导 <span class="inline">embedding_factory</span> 已被标记废弃。</p>
+注意 embedding 工厂从 <span class="mono">ragas.embeddings.base</span> 导入——从 <span class="mono">ragas.embeddings</span> 导 <span class="inline">embedding_factory</span> 已被标记废弃。
+上面的 <span class="inline">await</span> 需放在 <span class="mono">async def</span> 里或用 <span class="mono">asyncio.run(...)</span> 执行（交互式 notebook 可直接 await）。</p>
 
 <details class="accordion">
   <summary><span class="badge-num">1</span> 字段不齐会怎样？和 evaluate() 默认指标的关系 <span class="hint">点击展开详解</span></summary>
