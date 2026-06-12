@@ -293,21 +293,19 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
 </table>
 
 <h2>把零件接起来</h2>
-<p>测试生成线的终点 <span class="inline">Testset</span>，一步 <span class="inline">to_evaluation_dataset()</span> 就汇入评测线——这正是<strong>两条主线的合流点</strong>。
-要注意：测试集只给了 <span class="mono">user_input</span> + <span class="mono">reference</span>（问题 + 标准答案），你应用真实的 <span class="mono">response</span> / <span class="mono">retrieved_contexts</span> 得<strong>现跑你的 RAG</strong> 才有。
-现代做法是把这步放进 <span class="inline">@experiment</span> 函数里，边跑边打分：</p>
+<p>测试生成线的终点 <span class="inline">Testset</span> 装着<strong>问题 + 标准答案</strong>，正是两条主线的<strong>交汇处</strong>。但要注意：测试集只有 <span class="mono">user_input</span> + <span class="mono">reference</span>，真实的 <span class="mono">response</span> / <span class="mono">retrieved_contexts</span> 得<strong>现跑你的 RAG</strong> 才有。所以这份 golden 数据按两代入口分流：<span class="inline">to_evaluation_dataset()</span> 喂给经典 <span class="inline">evaluate()</span>；现代做法则把同一批"问题 + 标准答案"灌进一个带 backend 的 <span class="inline">Dataset</span>，在 <span class="inline">@experiment</span> 函数里边跑 RAG 边打分：</p>
 
 <pre class="code"><span class="kw">from</span> ragas.testset <span class="kw">import</span> TestsetGenerator
 <span class="kw">from</span> ragas.metrics.collections <span class="kw">import</span> (
     Faithfulness, ContextPrecision, ContextRecall, AnswerRelevancy,
 )
-<span class="kw">from</span> ragas <span class="kw">import</span> experiment, evaluate
+<span class="kw">from</span> ragas <span class="kw">import</span> Dataset, experiment, evaluate
 
 <span class="cm"># ② 造测试集：文档 → Testset（第 25、30 课）</span>
 generator = TestsetGenerator(llm=gen_llm, embedding_model=gen_emb)
 testset = generator.generate_with_langchain_docs(docs, testset_size=10)
 
-<span class="cm"># ③ 汇流：Testset → EvaluationDataset（第 6、30 课）；经典 evaluate() 直接吃它</span>
+<span class="cm"># ③ Testset → EvaluationDataset（第 6、30 课）：喂经典 evaluate()，也用来灌下面的 golden</span>
 eval_dataset = testset.to_evaluation_dataset()
 
 <span class="cm"># ④ 选指标：现代 collections 路径，注入裁判 LLM / embeddings（第 10 课）</span>
@@ -328,7 +326,11 @@ arel  = AnswerRelevancy(llm=eval_llm, embeddings=emb)
             <span class="st">"faithfulness"</span>: f.value, <span class="st">"context_precision"</span>: p.value,
             <span class="st">"context_recall"</span>: c.value, <span class="st">"answer_relevancy"</span>: a.value}          <span class="cm"># 这一行会被落盘留痕</span>
 
-<span class="cm"># golden：把测试集的"问题 + 标准答案"放进带 backend 的 ragas Dataset（第 6、8 课）</span>
+<span class="cm"># golden：把测试集的"问题 + 标准答案"灌进带 backend 的 ragas Dataset（第 6、8 课）</span>
+golden = Dataset(name=<span class="st">"rag_golden"</span>, backend=<span class="st">"local/csv"</span>, root_dir=<span class="st">"."</span>)
+<span class="kw">for</span> s <span class="kw">in</span> eval_dataset:                                  <span class="cm"># 复用上面 ③ 的 EvaluationDataset</span>
+    golden.append({<span class="st">"user_input"</span>: s.user_input, <span class="st">"reference"</span>: s.reference})
+golden.save()
 v1 = <span class="kw">await</span> run_eval.arun(golden, name=<span class="st">"v1-baseline"</span>)    <span class="cm"># 并发跑、自动落盘</span>
 
 <span class="cm"># 经典路径（第 7 课）：evaluate() 只收旧版 ragas.metrics 指标（传统 Metric 体系），</span>
@@ -382,7 +384,7 @@ v1 = <span class="kw">await</span> run_eval.arun(golden, name=<span class="st">"
 <div class="card spark">
   <div class="tag">💡 设计亮点</div>
   <ul>
-    <li><strong>两条主线一处合流</strong>：测试生成线（文档 → <span class="inline">Testset</span>）与评测线（指标 → 分数）靠 <span class="inline">to_evaluation_dataset()</span> 一步对接，全书前 37 课的能力在此汇成一条龙。</li>
+    <li><strong>两条主线在 golden 处交汇</strong>：测试生成线（文档 → <span class="inline">Testset</span>）与评测线（指标 → 分数）在 Testset 的"问题 + 标准答案"处对接——经典路径用 <span class="inline">to_evaluation_dataset()</span> 接 <span class="inline">evaluate()</span>，现代路径把同一份 golden 灌进带 backend 的 <span class="inline">Dataset</span> 配 <span class="inline">@experiment</span>；全书前 37 课的能力在此汇成一条龙。</li>
     <li><strong>@experiment 把评测闭环成迭代</strong>：把"调 RAG + 打分"写成一个函数，<span class="inline">arun</span> 并发跑、自动留痕，"改 → 跑 → 比"得以可持续滚动，而非算完就丢。</li>
     <li><strong>两代指标各配入口</strong>：现代 collections 四件套都是 <span class="inline">await ascore(...)</span>，配 <span class="inline">@experiment</span> 留痕迭代；要对已填好的数据集快速算总分，则改用经典 <span class="inline">evaluate()</span> + 旧版 <span class="mono">ragas.metrics</span> 指标——两代基类不通用，别混着传（<a href="13-metric-base.html">第 13 课</a>）。</li>
   </ul>
@@ -392,7 +394,7 @@ v1 = <span class="kw">await</span> run_eval.arun(golden, name=<span class="st">"
   <div class="tag">✅ 本课要点</div>
   <ul>
     <li>端到端六步：<strong>场景 → 造测试集 → 转评测集 → 选指标 → 跑评测 → 读结果迭代</strong>，正好把全书主线走了一遍。</li>
-    <li>记住合流点：<span class="inline">generate_with_langchain_docs</span> 出 <span class="inline">Testset</span>，<span class="inline">to_evaluation_dataset()</span> 接回评测线；而 <span class="mono">response</span> / <span class="mono">retrieved_contexts</span> 要现跑你的 RAG 才有。</li>
+    <li>记住交汇处：<span class="inline">generate_with_langchain_docs</span> 出 <span class="inline">Testset</span>（问题 + 标准答案）；经典路径 <span class="inline">to_evaluation_dataset()</span> → <span class="inline">evaluate()</span>，现代路径把同一份 golden 灌进 <span class="inline">Dataset</span> → <span class="inline">@experiment</span>；而 <span class="mono">response</span> / <span class="mono">retrieved_contexts</span> 要现跑你的 RAG 才有。</li>
     <li>评测是<strong>工程闭环</strong>，不是一次性打分：用 <span class="inline">@experiment</span> 让"改 → 跑 → 比"持续滚动，分数才会真的往上走。</li>
     <li>🎓 <strong>全书结业</strong>——从"我觉得还行"到"数据说它从 0.72 涨到 0.81"，你已握住 ragas 的全套手艺。去给你的 RAG 跑第一条真实的评测流水线吧！</li>
   </ul>
