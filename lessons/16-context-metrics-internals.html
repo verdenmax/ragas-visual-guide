@@ -295,6 +295,7 @@ verdicts = []
             numerator += cumsum / (i + <span class="st">1</span>)
     <span class="kw">return</span> numerator / (cumsum + <span class="st">1e-10</span>)    <span class="cm"># 除以命中总数</span></pre>
 <p>把相关项排在前面，<span class="mono">precision@k</span> 会更高，平均精度也更高——这正是信息检索里经典的 <strong>MAP（mean average precision）</strong>思路。</p>
+<p>举个数：verdict 为 <span class="mono">[1, 0, 1]</span> → 只在第 1、3 个命中位累加，<span class="mono">(1/1 + 2/3) / 2 ≈ 0.83</span>；若同样两条相关却排成 <span class="mono">[0, 1, 1]</span> → <span class="mono">(1/2 + 2/3) / 2 ≈ 0.58</span>。相关项排得越靠前，分越高。</p>
 <p>两个变体只差"拿什么当判断依据"：<span class="inline">ContextPrecision</span> 等于 <span class="inline">ContextPrecisionWithReference</span>（拿 <span class="mono">reference</span> 比），<span class="inline">ContextUtilization</span> 等于 <span class="inline">ContextPrecisionWithoutReference</span>（没有标准答案时改拿 <span class="mono">response</span> 比），算法完全一样。</p>
 
 <h2>ContextRecall：逐句归因</h2>
