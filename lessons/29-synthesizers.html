@@ -316,7 +316,7 @@ dist = default_query_distribution(llm, kg)
     </div>
     <div class="qa">
       <div class="q">✅ 默认为什么没有"单跳抽象"题</div>
-      <div class="a">默认分布里只放了 <span class="inline">SingleHopSpecificQuerySynthesizer</span>（单跳具体），多跳才分抽象 / 具体两种。单跳抽象不在默认题型里——当然你可以自定义 <span class="inline">QueryDistribution</span> 自行增减。</div>
+      <div class="a">默认分布里只放了 <span class="inline">SingleHopSpecificQuerySynthesizer</span>（单跳具体）。其实 ragas <strong>单跳只实现了"具体"这一种</strong>——abstract / specific 的区分<strong>只用于多跳</strong>，并没有现成的"单跳抽象"类。你可以自定义 <span class="inline">QueryDistribution</span> 调整这三种内置题型的配比，或自行实现新题型。</div>
     </div>
   </div>
 </details>

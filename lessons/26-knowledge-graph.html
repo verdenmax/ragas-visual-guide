@@ -315,6 +315,7 @@ kg = KnowledgeGraph.load(<span class="st">"kg.json"</span>)</pre>
   <tr><td class="mono">find_n_indirect_clusters</td><td>n 个 Set[Node]（路径，针对大图做了优化）</td><td>抽象多跳题：取 n 条跨节点路径</td></tr>
   <tr><td class="mono">find_two_nodes_single_rel</td><td>(Node, Relationship, Node) 三元组列表</td><td>具体多跳题：取"两节点 + 一条边"</td></tr>
 </table>
+<p>其中默认出题管道实际只用到后两个（<span class="inline">find_n_indirect_clusters</span> / <span class="inline">find_two_nodes_single_rel</span>，见 <a href="29-synthesizers.html">第 29 课</a>）；<span class="inline">find_indirect_clusters</span> 是更通用的簇发现 API，默认分布里并不直接调用。</p>
 
 <details class="accordion">
   <summary><span class="badge-num">1</span> "indirect cluster"（间接簇）到底指什么？<span class="hint">点击展开详解</span></summary>
