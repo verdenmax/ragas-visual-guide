@@ -216,11 +216,11 @@ LLM 当裁判，难免和人类口味有偏差。ragas 给指标准备了一套<
   一边帮他<strong>把评分标准的措辞改清楚</strong>（优化指令），一边给他<strong>看几份典型范卷</strong>（few-shot 示例）。培训完再拿没见过的卷子考他，看打分和老教师有多<strong>一致</strong>。
 </div>
 
-<p><strong>本课流程一眼看</strong>：给 LLM 指标做一次「培训」、对齐人类口味 👇</p>
+<p><strong>本课流程一眼看</strong>：给 LLM 指标做一次"培训"、对齐人类口味 👇</p>
 <div class="flow">
   <div class="node"><div class="nt">人工标注</div><div class="nd">输入 + 人给的分（.json）</div></div>
   <div class="arrow">→</div>
-  <div class="node"><div class="nt">喂给 train()</div><div class="nd">内置 / Simple 各有入口</div></div>
+  <div class="node"><div class="nt">喂给优化器</div><div class="nd">内置 train() / Simple align_and_validate()</div></div>
   <div class="arrow">→</div>
   <div class="node"><div class="nt">优化</div><div class="nd">改写指令 + 挑 few-shot 示例</div></div>
   <div class="arrow">→</div>
@@ -264,7 +264,7 @@ metric.train(
   <div class="acc-body">
     <div class="qa">
       <div class="q">🧪 反推 → 交叉 → 变异</div>
-      <div class="a">它内置了几个 PydanticPrompt：<span class="inline">ReverseEngineerPrompt</span> 先看"标注好的(输入, 期望输出)对"<strong>反推</strong>出"标注员当时大概拿到的指令"，得到初始种群；
+      <div class="a">它内置了几个 PydanticPrompt：<span class="inline">ReverseEngineerPrompt</span> 先看"标注好的（输入、期望输出）对"<strong>反推</strong>出"标注员当时大概拿到的指令"，得到初始种群；
         再用 <span class="inline">CrossOverPrompt</span> 杂交、<span class="inline">FeedbackMutationPrompt</span> 按反馈变异，逐代择优。可优化的步数由 <span class="mono">optimizer_config</span>（默认 <span class="mono">{"max_steps": 100}</span>）控制。</div>
     </div>
     <div class="qa">
@@ -518,7 +518,7 @@ make install              <span class="cm"># 内部：uv sync --group dev</span>
   <tr><th>命令</th><th>干什么</th><th>底层工具</th></tr>
   <tr><td class="mono">make format</td><td>格式化 + 自动修（含排序 / 删未用 import）</td><td class="mono">ruff format · ruff check --fix（lint 选 E/F/I）</td></tr>
   <tr><td class="mono">make type</td><td>类型检查（只查 <span class="mono">src/ragas</span>）</td><td class="mono">pyright（typeCheckingMode=basic）</td></tr>
-  <tr><td class="mono">make check</td><td>快速体检 = format + type（不跑测试）</td><td class="mono">上面两个</td></tr>
+  <tr><td class="mono">make check</td><td>快速体检 = format + type（不跑测试）</td><td>上面两个</td></tr>
   <tr><td class="mono">make test</td><td>跑单测，可 <span class="mono">k=</span> 只跑匹配的</td><td class="mono">pytest tests/unit</td></tr>
   <tr><td class="mono">make run-ci</td><td>本地完整复刻 GitHub CI</td><td class="mono">ruff --check + type + pytest --nbmake -n auto</td></tr>
 </table>

@@ -104,7 +104,7 @@ LESSON_02 = r"""
   <tr><td><strong>评测入口</strong></td><td><span class="mono">evaluate</span>, <span class="mono">aevaluate</span></td></tr>
   <tr><td><strong>实验入口</strong></td><td><span class="mono">experiment</span>, <span class="mono">Experiment</span>, <span class="mono">version_experiment</span></td></tr>
   <tr><td><strong>数据模型</strong></td><td><span class="mono">Dataset</span>, <span class="mono">DataTable</span>, <span class="mono">EvaluationDataset</span>, <span class="mono">SingleTurnSample</span>, <span class="mono">MultiTurnSample</span></td></tr>
-  <tr><td><strong>基建 / 配置</strong></td><td><span class="mono">RunConfig</span>, <span class="mono">backends</span>, <span class="mono">cacher</span>, <span class="mono">CacheInterface</span>, <span class="mono">DiskCacheBackend</span>, tokenizers</td></tr>
+  <tr><td><strong>基建 / 配置</strong></td><td><span class="mono">RunConfig</span>, <span class="mono">backends</span>, <span class="mono">cacher</span>, <span class="mono">CacheInterface</span>, <span class="mono">DiskCacheBackend</span>, <span class="mono">tokenizers</span></td></tr>
 </table>
 
 <p>那指标和模型从哪来？答案是<strong>按需从子模块导入</strong>，例如：</p>
@@ -146,7 +146,7 @@ LESSON_02 = r"""
   <div class="acc-body">
     <div class="qa">
       <div class="q">🧪 ragas.experimental 是怎么暴露的</div>
-      <div class="a"><span class="inline">__init__.py</span> 没有直接 import 它，而是用模块级 <span class="inline">__getattr__</span> 拦截属性访问：只有当你真的写 <span class="mono">ragas.experimental</span> 时，才去 import 背后的 <span class="mono">ragas_experimental</span> 包。
+      <div class="a"><span class="mono">__init__.py</span> 没有直接 import 它，而是用模块级 <span class="inline">__getattr__</span> 拦截属性访问：只有当你真的写 <span class="mono">ragas.experimental</span> 时，才去 import 背后的 <span class="mono">ragas_experimental</span> 包。
 <pre class="code"><span class="kw">def</span> <span class="fn">__getattr__</span>(name):
     <span class="kw">if</span> name == <span class="st">"experimental"</span>:
         <span class="kw">try</span>:
@@ -165,7 +165,7 @@ LESSON_02 = r"""
 
 <div class="card detail">
   <div class="tag">🔬 源码对应</div>
-  顶层门面定义在 <span class="mono">src/ragas/__init__.py</span>：<span class="mono">__all__</span> 列出对外导出的名字，模块级 <span class="mono">__getattr__</span> 负责惰性加载 <span class="mono">experimental</span>（实际导入 <span class="mono">ragas_experimental</span>，缺依赖时抛带安装指引的 <span class="mono">ImportError</span>）。各子包与核心模块见上方「子包地图」，此处不再赘列。
+  顶层门面定义在 <span class="mono">src/ragas/__init__.py</span>：<span class="mono">__all__</span> 列出对外导出的名字，模块级 <span class="mono">__getattr__</span> 负责惰性加载 <span class="mono">experimental</span>（实际导入 <span class="mono">ragas_experimental</span>，缺依赖时抛带安装指引的 <span class="mono">ImportError</span>）。各子包与核心模块见上方"子包地图"，此处不再赘列。
 </div>
 
 <div class="card spark">
@@ -200,15 +200,11 @@ LESSON_03 = r"""
   最后把零散分数<strong>汇总成一张成绩单</strong>（<span class="inline">EvaluationResult</span>）。
 </div>
 
-<p><strong>本课流程一眼看</strong>：一次 <span class="inline">evaluate</span> 把「样本 + 指标」一路变成成绩单 👇</p>
+<p><strong>本课流程一眼看</strong>：一次 <span class="inline">evaluate</span> 怎样把样本与指标算成一张成绩单 👇</p>
 <div class="flow">
-  <div class="node"><div class="nt">Dataset + metrics</div><div class="nd">样本 + 评分标准</div></div>
+  <div class="node"><div class="nt">样本 + 指标</div><div class="nd">一摞试卷 + 评分标准</div></div>
   <div class="arrow">→</div>
-  <div class="node"><div class="nt">校验·规整</div><div class="nd">转 EvaluationDataset</div></div>
-  <div class="arrow">→</div>
-  <div class="node"><div class="nt">注入裁判</div><div class="nd">缺则建 gpt-4o-mini + init</div></div>
-  <div class="arrow">→</div>
-  <div class="node"><div class="nt">拆任务</div><div class="nd">每个 样本 × 指标</div></div>
+  <div class="node"><div class="nt">拆判分任务</div><div class="nd">每个样本 × 每个指标</div></div>
   <div class="arrow">→</div>
   <div class="node"><div class="nt">并发打分</div><div class="nd">Executor · 失败转 nan</div></div>
   <div class="arrow">→</div>

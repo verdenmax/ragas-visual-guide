@@ -153,7 +153,7 @@ pre.code .fn { color: #82aaff; } pre.code .st { color: #c3e88d; } pre.code .nb {
   padding: 1.2rem 1rem; box-shadow: var(--shadow); }
 .flow .node { flex: 1 1 0; min-width: 110px; text-align: center; padding: .7rem .5rem;
   border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); }
-.flow .node .nt { font-weight: 700; font-size: .92rem; }
+.flow .node .nt { font-weight: 700; font-size: .92rem; overflow-wrap: break-word; }
 .flow .node .nd { font-size: .76rem; color: var(--muted); margin-top: .2rem; }
 .flow .node.hl { background: var(--accent-soft); border-color: var(--accent); }
 .flow .arrow { align-self: center; color: var(--faint); font-size: 1.3rem; padding: 0 .35rem; }
@@ -165,7 +165,7 @@ pre.code .fn { color: #82aaff; } pre.code .st { color: #c3e88d; } pre.code .nb {
   width: 2px; background: var(--line); }
 .vflow .num { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: #fff;
   display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .85rem; flex-shrink: 0; z-index:1; }
-.vflow .sc h4 { margin: .25rem 0 .2rem; font-size: 1rem; }
+.vflow .sc .vt { margin: .25rem 0 .2rem; font-size: 1rem; font-weight: 700; }
 .vflow .sc p { margin: .15rem 0; font-size: .92rem; color: var(--muted); }
 .vflow .sc .mono { font-size: .8rem; color: var(--accent-ink); }
 
@@ -278,11 +278,11 @@ LLM 当裁判，难免和人类口味有偏差。ragas 给指标准备了一套<
   一边帮他<strong>把评分标准的措辞改清楚</strong>（优化指令），一边给他<strong>看几份典型范卷</strong>（few-shot 示例）。培训完再拿没见过的卷子考他，看打分和老教师有多<strong>一致</strong>。
 </div>
 
-<p><strong>本课流程一眼看</strong>：给 LLM 指标做一次「培训」、对齐人类口味 👇</p>
+<p><strong>本课流程一眼看</strong>：给 LLM 指标做一次"培训"、对齐人类口味 👇</p>
 <div class="flow">
   <div class="node"><div class="nt">人工标注</div><div class="nd">输入 + 人给的分（.json）</div></div>
   <div class="arrow">→</div>
-  <div class="node"><div class="nt">喂给 train()</div><div class="nd">内置 / Simple 各有入口</div></div>
+  <div class="node"><div class="nt">喂给优化器</div><div class="nd">内置 train() / Simple align_and_validate()</div></div>
   <div class="arrow">→</div>
   <div class="node"><div class="nt">优化</div><div class="nd">改写指令 + 挑 few-shot 示例</div></div>
   <div class="arrow">→</div>
@@ -326,7 +326,7 @@ metric.train(
   <div class="acc-body">
     <div class="qa">
       <div class="q">🧪 反推 → 交叉 → 变异</div>
-      <div class="a">它内置了几个 PydanticPrompt：<span class="inline">ReverseEngineerPrompt</span> 先看"标注好的(输入, 期望输出)对"<strong>反推</strong>出"标注员当时大概拿到的指令"，得到初始种群；
+      <div class="a">它内置了几个 PydanticPrompt：<span class="inline">ReverseEngineerPrompt</span> 先看"标注好的（输入、期望输出）对"<strong>反推</strong>出"标注员当时大概拿到的指令"，得到初始种群；
         再用 <span class="inline">CrossOverPrompt</span> 杂交、<span class="inline">FeedbackMutationPrompt</span> 按反馈变异，逐代择优。可优化的步数由 <span class="mono">optimizer_config</span>（默认 <span class="mono">{"max_steps": 100}</span>）控制。</div>
     </div>
     <div class="qa">

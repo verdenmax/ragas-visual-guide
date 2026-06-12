@@ -382,7 +382,7 @@ print(r1.value, r2.value)  <span class="cm"># 0.xx  1.0</span></pre>
     </div>
     <div class="qa">
       <div class="q">✅ 取舍原则</div>
-      <div class="a">要"懂语义、容忍换种说法"→ 花钱请 LLM；要"快、稳、可复现、能进 CI"→ 用传统指标。实战常<strong>两者混用</strong>：先用传统指标快速回归初筛，再用 LLM 指标抓语义问题。</div>
+      <div class="a">要"懂语义、容忍换种说法" → 花钱请 LLM；要"快、稳、可复现、能进 CI" → 用传统指标。实战常<strong>两者混用</strong>：先用传统指标快速回归初筛，再用 LLM 指标抓语义问题。</div>
     </div>
   </div>
 </details>

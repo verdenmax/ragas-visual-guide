@@ -257,12 +257,13 @@ LESSON_07 = r"""
   <div class="arrow">→</div>
   <div class="node"><div class="nt">补裁判</div><div class="nd">缺 LLM 则建 gpt-4o-mini</div></div>
   <div class="arrow">→</div>
-  <div class="node"><div class="nt">并发打分</div><div class="nd">每个 样本 × 指标 ascore</div></div>
+  <div class="node"><div class="nt">并发打分</div><div class="nd">每个样本 × 指标 ascore</div></div>
   <div class="arrow">→</div>
   <div class="node"><div class="nt">汇总</div><div class="nd">safe_nanmean 忽略失败行</div></div>
   <div class="arrow">→</div>
   <div class="node hl"><div class="nt">EvaluationResult</div><div class="nd">to_pandas · total_cost*</div></div>
 </div>
+<p style="font-size:.8rem;color:var(--faint);margin-top:-.5rem">* <span class="mono">total_cost</span> / <span class="mono">total_tokens</span> 需在调用时传 <span class="mono">token_usage_parser</span> 才可用，详见下文。</p>
 
 <h2>最小可跑示例</h2>
 <pre class="code"><span class="kw">from</span> ragas <span class="kw">import</span> evaluate, EvaluationDataset, SingleTurnSample
@@ -304,7 +305,7 @@ df = result.to_pandas()  <span class="cm"># 原始数据列 + 每个指标一列
 
 <details class="accordion">
   <summary><span class="badge-num">2</span> 列名对不齐怎么办（仅 HF Dataset）<span class="hint">点击展开详解</span></summary>
-  <div class="acc-body"><div class="qa"><div class="a">若数据来自 <strong>HuggingFace Dataset</strong> 且列名和 ragas 默认不一致（如 <span class="mono">contexts_v1</span>），可传 <span class="mono">column_map={"contexts": "contexts_v1"}</span>，内部 <span class="inline">remap_column_names</span> 先反向重命名再校验；直接用 <span class="inline">EvaluationDataset</span> 则按字段名匹配、无需此参。</div></div></div>
+  <div class="acc-body"><div class="qa"><div class="q">✅ 列名映射</div><div class="a">若数据来自 <strong>HuggingFace Dataset</strong> 且列名和 ragas 默认不一致（如 <span class="mono">contexts_v1</span>），可传 <span class="mono">column_map={"contexts": "contexts_v1"}</span>，内部 <span class="inline">remap_column_names</span> 先反向重命名再校验；直接用 <span class="inline">EvaluationDataset</span> 则按字段名匹配、无需此参。</div></div></div>
 </details>
 
 <div class="card detail">
@@ -366,15 +367,15 @@ print(exp)   <span class="cm"># Experiment(name=..., len=...)，结果已存进 
 
 <p><strong>本课流程一眼看</strong>：<span class="inline">await fn.arun(dataset)</span> 这一句，背后顺次做了 5 件事 👇</p>
 <div class="vflow">
-  <div class="step"><div class="num">1</div><div class="sc"><h4>取名</h4>
+  <div class="step"><div class="num">1</div><div class="sc"><div class="vt">取名</div>
     <p>没给 <span class="mono">name</span> 就用 <span class="mono">memorable_names</span> 起个好记的名字（有 <span class="mono">name_prefix</span> 则拼前缀）</p></div></div>
-  <div class="step"><div class="num">2</div><div class="sc"><h4>解析 backend</h4>
+  <div class="step"><div class="num">2</div><div class="sc"><div class="vt">解析 backend</div>
     <p>传入的 / 装饰器默认的，否则沿用 <span class="mono">dataset.backend</span>，经 <span class="mono">_resolve_backend</span> 解析</p></div></div>
-  <div class="step"><div class="num">3</div><div class="sc"><h4>建 Experiment</h4>
+  <div class="step"><div class="num">3</div><div class="sc"><div class="vt">建 Experiment</div>
     <p>新建一个 <span class="mono">Experiment</span>（继承 <span class="mono">DataTable</span>，<a href="06-two-datasets.html">第 6 课</a>）</p></div></div>
-  <div class="step"><div class="num">4</div><div class="sc"><h4>并发跑</h4>
+  <div class="step"><div class="num">4</div><div class="sc"><div class="vt">并发跑</div>
     <p>每行包成任务，用 <span class="mono">asyncio.as_completed</span> 并发执行、<span class="mono">tqdm</span> 显示进度</p></div></div>
-  <div class="step"><div class="num">5</div><div class="sc"><h4>存盘</h4>
+  <div class="step"><div class="num">5</div><div class="sc"><div class="vt">存盘</div>
     <p><span class="mono">save()</span> 落 backend 后返回该 <span class="mono">Experiment</span></p></div></div>
 </div>
 

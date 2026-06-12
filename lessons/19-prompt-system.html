@@ -153,7 +153,7 @@ pre.code .fn { color: #82aaff; } pre.code .st { color: #c3e88d; } pre.code .nb {
   padding: 1.2rem 1rem; box-shadow: var(--shadow); }
 .flow .node { flex: 1 1 0; min-width: 110px; text-align: center; padding: .7rem .5rem;
   border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); }
-.flow .node .nt { font-weight: 700; font-size: .92rem; }
+.flow .node .nt { font-weight: 700; font-size: .92rem; overflow-wrap: break-word; }
 .flow .node .nd { font-size: .76rem; color: var(--muted); margin-top: .2rem; }
 .flow .node.hl { background: var(--accent-soft); border-color: var(--accent); }
 .flow .arrow { align-self: center; color: var(--faint); font-size: 1.3rem; padding: 0 .35rem; }
@@ -165,7 +165,7 @@ pre.code .fn { color: #82aaff; } pre.code .st { color: #c3e88d; } pre.code .nb {
   width: 2px; background: var(--line); }
 .vflow .num { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: #fff;
   display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .85rem; flex-shrink: 0; z-index:1; }
-.vflow .sc h4 { margin: .25rem 0 .2rem; font-size: 1rem; }
+.vflow .sc .vt { margin: .25rem 0 .2rem; font-size: 1rem; font-weight: 700; }
 .vflow .sc p { margin: .15rem 0; font-size: .92rem; color: var(--muted); }
 .vflow .sc .mono { font-size: .8rem; color: var(--accent-ink); }
 
@@ -276,7 +276,7 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
   <span class="inline">PydanticPrompt</span> 像一张<strong>带标准答题格式的考卷</strong>：印着题面（instruction）、必须遵守的答题格式（输出的 JSON schema）、几道例题（few-shot），最后才是这次的题目（输入）。考生（LLM）答完，<strong>阅卷机先按格式核对</strong>——格式不对就把卷子<strong>退回去让它照格式重填</strong>，直到合格或用完重试次数。
 </div>
 
-<p><strong>本课流程一眼看</strong>：PydanticPrompt 把一次「问 LLM」变成结构化、可自我纠错的流程 👇</p>
+<p><strong>本课流程一眼看</strong>：PydanticPrompt 把一次"问 LLM"变成结构化、可自我纠错的流程 👇</p>
 <div class="flow">
   <div class="node"><div class="nt">拼考卷</div><div class="nd">指令 + schema + 例题 + 输入</div></div>
   <div class="arrow">→</div>

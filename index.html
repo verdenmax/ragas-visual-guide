@@ -153,7 +153,7 @@ pre.code .fn { color: #82aaff; } pre.code .st { color: #c3e88d; } pre.code .nb {
   padding: 1.2rem 1rem; box-shadow: var(--shadow); }
 .flow .node { flex: 1 1 0; min-width: 110px; text-align: center; padding: .7rem .5rem;
   border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); }
-.flow .node .nt { font-weight: 700; font-size: .92rem; }
+.flow .node .nt { font-weight: 700; font-size: .92rem; overflow-wrap: break-word; }
 .flow .node .nd { font-size: .76rem; color: var(--muted); margin-top: .2rem; }
 .flow .node.hl { background: var(--accent-soft); border-color: var(--accent); }
 .flow .arrow { align-self: center; color: var(--faint); font-size: 1.3rem; padding: 0 .35rem; }
@@ -165,7 +165,7 @@ pre.code .fn { color: #82aaff; } pre.code .st { color: #c3e88d; } pre.code .nb {
   width: 2px; background: var(--line); }
 .vflow .num { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: #fff;
   display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .85rem; flex-shrink: 0; z-index:1; }
-.vflow .sc h4 { margin: .25rem 0 .2rem; font-size: 1rem; }
+.vflow .sc .vt { margin: .25rem 0 .2rem; font-size: 1rem; font-weight: 700; }
 .vflow .sc p { margin: .15rem 0; font-size: .92rem; color: var(--muted); }
 .vflow .sc .mono { font-size: .8rem; color: var(--accent-ink); }
 
@@ -268,10 +268,10 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
     然后深入<strong>指标源码内部</strong>与<strong>引擎基础设施</strong>，接着学会<strong>自动生成测试集</strong>，再到<strong>实验与工程化</strong>，最后<strong>端到端实战</strong>。
     每一课都配有真实的代码文件对应，既有宏观理解，也有细节拆解。</p>
     <div class="legend">
-      <span><i style="background:var(--blue)"></i>宏观理解</span>
       <span><i style="background:var(--purple)"></i>细节 / 源码</span>
       <span><i style="background:var(--amber)"></i>生活类比</span>
       <span><i style="background:var(--accent)"></i>关键要点</span>
+      <span><i style="background:#e0a000"></i>设计亮点</span>
     </div>
     <div style="margin-top:1.1rem">
       <a href="ragas-visual-guide.pdf" class="pdf-btn">📄 下载完整 PDF（全 39 课）</a>

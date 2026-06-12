@@ -153,7 +153,7 @@ pre.code .fn { color: #82aaff; } pre.code .st { color: #c3e88d; } pre.code .nb {
   padding: 1.2rem 1rem; box-shadow: var(--shadow); }
 .flow .node { flex: 1 1 0; min-width: 110px; text-align: center; padding: .7rem .5rem;
   border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); }
-.flow .node .nt { font-weight: 700; font-size: .92rem; }
+.flow .node .nt { font-weight: 700; font-size: .92rem; overflow-wrap: break-word; }
 .flow .node .nd { font-size: .76rem; color: var(--muted); margin-top: .2rem; }
 .flow .node.hl { background: var(--accent-soft); border-color: var(--accent); }
 .flow .arrow { align-self: center; color: var(--faint); font-size: 1.3rem; padding: 0 .35rem; }
@@ -165,7 +165,7 @@ pre.code .fn { color: #82aaff; } pre.code .st { color: #c3e88d; } pre.code .nb {
   width: 2px; background: var(--line); }
 .vflow .num { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: #fff;
   display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .85rem; flex-shrink: 0; z-index:1; }
-.vflow .sc h4 { margin: .25rem 0 .2rem; font-size: 1rem; }
+.vflow .sc .vt { margin: .25rem 0 .2rem; font-size: 1rem; font-weight: 700; }
 .vflow .sc p { margin: .15rem 0; font-size: .92rem; color: var(--muted); }
 .vflow .sc .mono { font-size: .8rem; color: var(--accent-ink); }
 
@@ -268,7 +268,7 @@ table.t td.mono, table.t td .mono { font-family: ui-monospace, monospace; font-s
   </div>
   
 <p class="lead" style="font-size:1.06rem;color:var(--muted);margin-top:-.6rem">
-有了知识图谱、persona 和 scenario 配方，谁来真正"出题"？答案是 <span class="mono">Synthesizer</span>（合成器 / 出题官）。
+有了知识图谱、persona 和 scenario 配方，谁来真正"出题"？答案是 <span class="inline">Synthesizer</span>（合成器 / 出题官）。
 ragas 区分<strong>单跳</strong>（一个节点）和<strong>多跳</strong>（跨节点推理）两类，并按比例自动分配题量。
 </p>
 

@@ -197,7 +197,7 @@ Faithfulness（忠实度）查的是<strong>幻觉</strong>：答案里的每一
   判作业有没有"瞎编"，老师不会整篇笼统打分，而是<strong>先把答案拆成一句句论点</strong>，再拿着<strong>参考资料逐句核对</strong>："这句资料里有→给过；这句资料没提→打叉。"最后<strong>过关句数 ÷ 总句数</strong>就是忠实度。Faithfulness 干的正是这件事。
 </div>
 
-<p><strong>本课流程一眼看</strong>：Faithfulness 查幻觉的两步走 👇</p>
+<p><strong>本课流程一眼看</strong>：Faithfulness 查幻觉的流程——拆句 → 逐句 NLI → 计分 👇</p>
 <div class="flow">
   <div class="node"><div class="nt">答案 response</div><div class="nd">+ retrieved_contexts</div></div>
   <div class="arrow">→</div>
@@ -298,15 +298,17 @@ LESSON_16 = r"""
   Recall 像批改时<strong>拿标准答案逐句找出处</strong>：标准答案每写一句，就去检索资料里翻一翻"这句有没有依据"，翻得到的越多说明召回越全。一个看<strong>排序</strong>，一个看<strong>覆盖</strong>。
 </div>
 
+<p><strong>本课流程一眼看</strong>：检索端从两个角度体检——排序质量（Precision）与覆盖率（Recall） 👇</p>
+<div class="flow">
+   <div class="node"><div class="nt">检索结果</div><div class="nd">contexts + reference</div></div>
+   <div class="arrow">→</div>
+   <div class="node"><div class="nt">逐条 / 逐句判定</div><div class="nd">LLM 判 0/1</div></div>
+   <div class="arrow">→</div>
+   <div class="node hl"><div class="nt">Precision · Recall</div><div class="nd">排序质量 · 覆盖率</div></div>
+</div>
+
 <h2>ContextPrecision：逐条判定 + 平均精度</h2>
 <p><span class="inline">ContextPrecisionWithReference</span> 的 <span class="inline">ascore</span> 对<strong>每条检索结果各问一次 LLM</strong>："这条 context 对得出参考答案有没有用？" 拿到一串 0/1 的 <span class="mono">verdict</span>，再算<strong>平均精度（average precision）</strong>：</p>
-<div class="flow">
-  <div class="node"><div class="nt">每条 context</div><div class="nd">逐条遍历</div></div>
-  <div class="arrow">→</div>
-  <div class="node"><div class="nt">问 LLM</div><div class="nd">对得出 reference 有用? 0/1</div></div>
-  <div class="arrow">→</div>
-  <div class="node hl"><div class="nt">平均精度 MAP</div><div class="nd">命中越靠前分越高</div></div>
-</div>
 <pre class="code"><span class="cm"># 逐条判定：每个 context 调一次 agenerate</span>
 verdicts = []
 <span class="kw">for</span> context <span class="kw">in</span> retrieved_contexts:
@@ -328,13 +330,6 @@ verdicts = []
 
 <h2>ContextRecall：逐句归因</h2>
 <p><span class="inline">ContextRecall</span> 反过来——把 <span class="mono">reference</span> 拆成一句句陈述，逐句判断<strong>能不能归因到检索到的 context</strong>（<span class="mono">attributed</span> 0/1），再算占比：</p>
-<div class="flow">
-  <div class="node"><div class="nt">reference 拆句</div><div class="nd">标准答案逐句</div></div>
-  <div class="arrow">→</div>
-  <div class="node"><div class="nt">逐句归因</div><div class="nd">能否在 context 找到? 0/1</div></div>
-  <div class="arrow">→</div>
-  <div class="node hl"><div class="nt">占比</div><div class="nd">归因句数 ÷ 总句数</div></div>
-</div>
 <pre class="code"><span class="cm"># 一次调用拿回所有句子的归因分类</span>
 context = <span class="st">"\n"</span>.join(retrieved_contexts)
 result = <span class="kw">await</span> self.llm.agenerate(self.prompt.to_string(input_data), ContextRecallOutput)
@@ -427,9 +422,9 @@ score = cosine_sim.mean() * int(<span class="kw">not</span> all_noncommittal)   
 <h2>FactualCorrectness：双向 NLI → P/R/F1</h2>
 <p>事实一致度把 Faithfulness 的"拆句 + NLI"（<a href="15-faithfulness-internals.html">第 15 课</a>）升级成<strong>双向</strong>核对，再套上分类指标的 TP/FP/FN：</p>
 <div class="flow">
-  <div class="node"><div class="nt">拆 response 的 claim</div><div class="nd">对 reference 做 NLI → TP/FP</div></div>
+  <div class="node"><div class="nt">拆 response 的 claim</div><div class="nd">对 reference 逐条 NLI：TP / FP</div></div>
   <div class="arrow">→</div>
-  <div class="node"><div class="nt">反向：拆 reference</div><div class="nd">对 response 做 NLI → FN（非 precision）</div></div>
+  <div class="node"><div class="nt">反向：拆 reference</div><div class="nd">对 response NLI：FN（非 precision）</div></div>
   <div class="arrow">→</div>
   <div class="node hl"><div class="nt">P / R / F1</div><div class="nd">按 mode（默认 f1）</div></div>
 </div>
@@ -557,7 +552,7 @@ classified  = <span class="kw">await</span> self._classify_topics(reference_topi
 <span class="cm"># TP=答了且该答, FP=答了却不该答（跑题）, FN=该答却拒答 → precision/recall/f1</span></pre>
 
 <table class="t">
-  <tr><th>指标</th><th>评什么</th><th>靠 LLM?</th><th>关键输入</th><th>计分</th></tr>
+  <tr><th>指标</th><th>评什么</th><th>靠 LLM？</th><th>关键输入</th><th>计分</th></tr>
   <tr><td class="mono">ToolCallAccuracy</td><td>工具调用对不对（顺序 + 参数）</td><td>否（规则）</td><td class="mono">user_input + reference_tool_calls</td><td>参数精度 × 序列对齐</td></tr>
   <tr><td class="mono">ToolCallF1</td><td>工具调用集合的 F1</td><td>否（规则）</td><td class="mono">user_input + reference_tool_calls</td><td>集合 TP/FP/FN → F1</td></tr>
   <tr><td class="mono">AgentGoalAccuracy</td><td>是否达成用户目标</td><td>是</td><td class="mono">user_input（+ reference）</td><td>0 / 1</td></tr>

@@ -10,7 +10,7 @@ LESSON_19 = r"""
   <span class="inline">PydanticPrompt</span> 像一张<strong>带标准答题格式的考卷</strong>：印着题面（instruction）、必须遵守的答题格式（输出的 JSON schema）、几道例题（few-shot），最后才是这次的题目（输入）。考生（LLM）答完，<strong>阅卷机先按格式核对</strong>——格式不对就把卷子<strong>退回去让它照格式重填</strong>，直到合格或用完重试次数。
 </div>
 
-<p><strong>本课流程一眼看</strong>：PydanticPrompt 把一次「问 LLM」变成结构化、可自我纠错的流程 👇</p>
+<p><strong>本课流程一眼看</strong>：PydanticPrompt 把一次"问 LLM"变成结构化、可自我纠错的流程 👇</p>
 <div class="flow">
   <div class="node"><div class="nt">拼考卷</div><div class="nd">指令 + schema + 例题 + 输入</div></div>
   <div class="arrow">→</div>
@@ -488,7 +488,7 @@ result.total_cost(cost_per_input_token=<span class="st">5e-6</span>, cost_per_ou
 <span class="cm"># _generate_cache_key：排除 EXCLUDE_KEYS（如 callbacks），</span>
 <span class="cm"># 再 json.dumps(sort_keys=True) + sha256；_make_hashable 递归处理嵌套</span>
 
-<span class="nd">@cacher</span>(cache_backend=DiskCacheBackend())
+<span class="kw">@</span><span class="fn">cacher</span>(cache_backend=DiskCacheBackend())
 <span class="kw">async def</span> <span class="fn">agenerate</span>(...): ...   <span class="cm"># 相同输入直接命中缓存</span></pre>
 <p>键里特意<strong>排除 <span class="mono">callbacks</span></strong>——它每轮都变且不影响结果，否则永远命不中缓存。</p>
 
